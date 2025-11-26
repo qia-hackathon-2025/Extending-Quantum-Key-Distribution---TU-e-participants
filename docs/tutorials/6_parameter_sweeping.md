@@ -1,439 +1,489 @@
 # Tutorial 6: Parameter Sweeping
 
-Often you'll want to simulate not a single network configuration but a range of parameters. This section shows how to modify network configurations inside `run_simulation.py` and how to import components of the network to support this modification.
+This section shows how to systematically vary parameters in your simulations for performance analysis and optimization.
 
 ## Basic Parameter Sweeping
 
 ### Example: Varying Link Fidelity
 
-Suppose you have an application that generates EPR pairs and measures them after applying a Hadamard gate. Your goal is to:
-
-1. Modify the network configuration to use a depolarise link
-2. Vary the fidelity of the link
-3. Track how the error rate changes
-
-Here's how to set up the sweep in `run_simulation.py`:
-
 ```python
 from application import AliceProgram, BobProgram
 from squidasm.run.stack.config import (
+    StackNetworkConfig,
     DepolariseLinkConfig,
     LinkConfig,
-    StackNetworkConfig,
 )
 from squidasm.run.stack.run import run
 import numpy as np
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
 
 # Load base configuration
 cfg = StackNetworkConfig.from_file("config.yaml")
 
-# Load depolarise link configuration from a separate file
-depolarise_config = DepolariseLinkConfig.from_file("depolarise_link_config.yaml")
+# Create depolarise link (will modify fidelity)
+depolarise_config = DepolariseLinkConfig(
+    fidelity=0.9,
+    t_cycle=10.0,
+    prob_success=0.8
+)
 
-# Create a depolarise link object
 link = LinkConfig(
     stack1="Alice",
     stack2="Bob",
     typ="depolarise",
     cfg=depolarise_config
 )
-
-# Replace the original link(s) with the depolarise link
 cfg.links = [link]
 
-# Define the range of fidelities to test
-fidelity_list = np.arange(0.5, 1.0, step=0.05)
-error_rate_results = []
+# Sweep over fidelity values
+fidelities = np.arange(0.5, 1.0, step=0.05)
+results = []
 
-# Iterate over each fidelity value
-for fidelity in fidelity_list:
-    # Update the fidelity for this iteration
+for fidelity in fidelities:
+    # Update configuration
     depolarise_config.fidelity = fidelity
     
-    # Set program parameters
-    epr_rounds = 10
-    alice_program = AliceProgram(num_epr_rounds=epr_rounds)
-    bob_program = BobProgram(num_epr_rounds=epr_rounds)
+    # Create programs
+    alice_program = AliceProgram(num_rounds=10)
+    bob_program = BobProgram(num_rounds=10)
     
-    # Run the simulation
-    simulation_iterations = 20
-    results_alice, results_bob = run(
+    # Run simulation
+    alice_results, bob_results = run(
         config=cfg,
         programs={"Alice": alice_program, "Bob": bob_program},
-        num_times=simulation_iterations,
+        num_times=50
     )
     
-    # Process results to calculate error rate
+    # Calculate error rate
     errors = 0
     total = 0
-    for i in range(simulation_iterations):
-        alice_measurements = results_alice[i]["measurements"]
-        bob_measurements = results_bob[i]["measurements"]
-        
-        errors += sum(am != bm for am, bm in zip(alice_measurements, bob_measurements))
-        total += len(alice_measurements)
+    for a_res, b_res in zip(alice_results, bob_results):
+        a_meas = a_res["measurements"]
+        b_meas = b_res["measurements"]
+        errors += sum(a != b for a, b in zip(a_meas, b_meas))
+        total += len(a_meas)
     
     error_rate = errors / total if total > 0 else 0
-    error_rate_results.append((fidelity, error_rate))
-    
-    print(f"Fidelity: {fidelity:.2f}, Error rate: {error_rate * 100:.1f}%")
+    results.append((fidelity, error_rate))
+    print(f"Fidelity: {fidelity:.2f}, Error rate: {error_rate:.2%}")
 
-# Visualize results
-fidelities = [x[0] for x in error_rate_results]
-errors = [x[1] for x in error_rate_results]
+# Plot results
+fids = [r[0] for r in results]
+errs = [r[1] for r in results]
 
-pyplot.figure(figsize=(8, 6))
-pyplot.plot(fidelities, errors, 'o-', linewidth=2, markersize=8)
-pyplot.xlabel('Link Fidelity', fontsize=12)
-pyplot.ylabel('Error Rate', fontsize=12)
-pyplot.title('EPR Pair Error Rate vs Link Fidelity', fontsize=14)
-pyplot.grid(True, alpha=0.3)
-pyplot.tight_layout()
-pyplot.savefig('output_error_vs_fidelity.png', dpi=150)
-pyplot.show()
+plt.figure(figsize=(8, 6))
+plt.plot(fids, errs, 'o-', linewidth=2, markersize=8)
+plt.xlabel('Link Fidelity')
+plt.ylabel('Error Rate')
+plt.title('EPR Pair Error Rate vs Link Fidelity')
+plt.grid(True, alpha=0.3)
+plt.savefig('fidelity_sweep.png', dpi=150)
+plt.show()
 ```
 
-### Loading Link Configuration from File
+## Configuration Classes
 
-The link configuration can be stored separately:
-
-**`depolarise_link_config.yaml`**:
-
-```yaml
-fidelity: 0.9
-t_cycle: 10.0
-prob_success: 0.8
-```
-
-Load it in Python:
+### DepolariseLinkConfig
 
 ```python
-depolarise_config = DepolariseLinkConfig.from_file("depolarise_link_config.yaml")
-```
+from squidasm.run.stack.config import DepolariseLinkConfig
 
-Alternatively, create it directly in Python:
-
-```python
-# Create configuration directly without a file
-depolarise_config = DepolariseLinkConfig(
-    fidelity=0.9,
+# Create directly
+config = DepolariseLinkConfig(
+    fidelity=0.95,
     t_cycle=10.0,
     prob_success=0.8
+)
+
+# Or load from file
+config = DepolariseLinkConfig.from_file("link_config.yaml")
+```
+
+### GenericQDeviceConfig
+
+```python
+from squidasm.run.stack.config import GenericQDeviceConfig
+
+qdevice_config = GenericQDeviceConfig(
+    num_qubits=5,
+    T1=1e6,
+    T2=8e5,
+    init_time=100,
+    single_qubit_gate_time=50,
+    two_qubit_gate_time=200,
+    measure_time=100,
+    single_qubit_gate_depolar_prob=0.01,
+    two_qubit_gate_depolar_prob=0.05
 )
 ```
 
 ## Multi-Parameter Sweeping
 
-You can vary multiple parameters simultaneously:
+Use `itertools.product` for sweeping multiple parameters:
 
 ```python
 from itertools import product
 
-# Define ranges for multiple parameters
-fidelities = np.arange(0.5, 1.0, step=0.1)
-prob_successes = np.arange(0.5, 1.0, step=0.1)
+# Define parameter ranges
+fidelities = [0.8, 0.9, 0.95, 0.99]
+t_cycles = [5, 10, 50, 100]
+prob_successes = [0.5, 0.8, 0.95]
 
 results = {}
 
-# Sweep over all combinations
-for fidelity, prob_success in product(fidelities, prob_successes):
+for fidelity, t_cycle, prob in product(fidelities, t_cycles, prob_successes):
+    # Update configuration
     depolarise_config.fidelity = fidelity
-    depolarise_config.prob_success = prob_success
+    depolarise_config.t_cycle = t_cycle
+    depolarise_config.prob_success = prob
     
-    # Run simulation and collect results
-    alice_program = AliceProgram(num_epr_rounds=10)
-    bob_program = BobProgram(num_epr_rounds=10)
-    
-    results_alice, results_bob = run(
+    # Run simulation
+    alice_results, bob_results = run(
         config=cfg,
-        programs={"Alice": alice_program, "Bob": bob_program},
-        num_times=20,
+        programs={"Alice": AliceProgram(), "Bob": BobProgram()},
+        num_times=20
     )
     
-    # Calculate error rate
-    errors = sum(
-        sum(results_alice[i]["measurements"][j] != results_bob[i]["measurements"][j]
-            for j in range(len(results_alice[i]["measurements"])))
-        for i in range(len(results_alice))
-    )
-    total = sum(len(results_alice[i]["measurements"]) for i in range(len(results_alice)))
-    error_rate = errors / total
+    # Store results
+    error_rate = calculate_error_rate(alice_results, bob_results)
+    results[(fidelity, t_cycle, prob)] = error_rate
     
-    results[(fidelity, prob_success)] = error_rate
-    
-    print(f"Fidelity: {fidelity:.2f}, Prob Success: {prob_success:.2f}, "
-          f"Error rate: {error_rate * 100:.1f}%")
+    print(f"F={fidelity}, t={t_cycle}, p={prob}: {error_rate:.2%}")
 
-# Visualize as a heatmap
-import matplotlib.pyplot as plt
-
-fidelity_vals = sorted(set(k[0] for k in results.keys()))
-prob_success_vals = sorted(set(k[1] for k in results.keys()))
-
-data = np.array([
-    [results[(f, p)] for p in prob_success_vals]
-    for f in fidelity_vals
-])
+# Create heatmap for fixed prob_success
+prob = 0.8
+data = np.zeros((len(fidelities), len(t_cycles)))
+for i, f in enumerate(fidelities):
+    for j, t in enumerate(t_cycles):
+        data[i, j] = results[(f, t, prob)]
 
 plt.imshow(data, aspect='auto', origin='lower', cmap='RdYlGn_r')
 plt.colorbar(label='Error Rate')
-plt.xlabel('Probability of Success')
+plt.xticks(range(len(t_cycles)), t_cycles)
+plt.yticks(range(len(fidelities)), fidelities)
+plt.xlabel('t_cycle (ns)')
 plt.ylabel('Fidelity')
-plt.xticks(range(len(prob_success_vals)), [f"{p:.1f}" for p in prob_success_vals])
-plt.yticks(range(len(fidelity_vals)), [f"{f:.1f}" for f in fidelity_vals])
-plt.tight_layout()
-plt.savefig('output_sweep_heatmap.png', dpi=150)
-plt.show()
+plt.title(f'Error Rate (prob_success={prob})')
+plt.savefig('heatmap.png')
+```
+
+## Sweeping Device Parameters
+
+### Varying T1/T2 Decoherence
+
+```python
+T1_values = [1e5, 1e6, 1e7, 1e8]  # ns
+T2_values = [1e4, 1e5, 1e6, 1e7]  # ns
+
+results = {}
+
+for T1, T2 in product(T1_values, T2_values):
+    if T2 > T1:
+        continue  # T2 cannot exceed T1
+    
+    # Update device configuration for both nodes
+    cfg.stacks[0].qdevice_cfg.T1 = T1
+    cfg.stacks[0].qdevice_cfg.T2 = T2
+    cfg.stacks[1].qdevice_cfg.T1 = T1
+    cfg.stacks[1].qdevice_cfg.T2 = T2
+    
+    # Run simulation
+    alice_results, bob_results = run(
+        config=cfg,
+        programs={"Alice": AliceProgram(), "Bob": BobProgram()},
+        num_times=50
+    )
+    
+    error_rate = calculate_error_rate(alice_results, bob_results)
+    results[(T1, T2)] = error_rate
+```
+
+### Varying Gate Noise
+
+```python
+depolar_probs = [0.0, 0.001, 0.005, 0.01, 0.05, 0.1]
+
+for prob in depolar_probs:
+    cfg.stacks[0].qdevice_cfg.single_qubit_gate_depolar_prob = prob
+    cfg.stacks[0].qdevice_cfg.two_qubit_gate_depolar_prob = prob * 5
+    cfg.stacks[1].qdevice_cfg.single_qubit_gate_depolar_prob = prob
+    cfg.stacks[1].qdevice_cfg.two_qubit_gate_depolar_prob = prob * 5
+    
+    # Run and collect results...
 ```
 
 ## Sweeping Application Parameters
 
-You can also vary parameters in your programs:
+Vary parameters passed to your programs:
 
 ```python
-# Sweep over number of EPR pairs
-epr_rounds_list = [5, 10, 20, 50, 100]
-results = []
+# Sweep number of EPR rounds
+round_counts = [5, 10, 20, 50, 100, 200]
 
-for epr_rounds in epr_rounds_list:
-    alice_program = AliceProgram(num_epr_rounds=epr_rounds)
-    bob_program = BobProgram(num_epr_rounds=epr_rounds)
+for num_rounds in round_counts:
+    alice_program = AliceProgram(num_rounds=num_rounds)
+    bob_program = BobProgram(num_rounds=num_rounds)
     
-    results_alice, results_bob = run(
+    results = run(
         config=cfg,
         programs={"Alice": alice_program, "Bob": bob_program},
-        num_times=20,
+        num_times=20
     )
-    
-    # Calculate average measurements per round
-    avg_measurements = sum(
-        len(results_alice[i]["measurements"])
-        for i in range(len(results_alice))
-    ) / len(results_alice)
-    
-    # Calculate error rate
-    errors = sum(
-        sum(results_alice[i]["measurements"][j] != results_bob[i]["measurements"][j]
-            for j in range(len(results_alice[i]["measurements"])))
-        for i in range(len(results_alice))
-    )
-    total = sum(len(results_alice[i]["measurements"]) for i in range(len(results_alice)))
-    error_rate = errors / total
-    
-    results.append({
-        'epr_rounds': epr_rounds,
-        'error_rate': error_rate,
-        'avg_measurements': avg_measurements
-    })
-    
-    print(f"EPR Rounds: {epr_rounds}, Error rate: {error_rate * 100:.1f}%")
-
-# Visualize
-rounds = [r['epr_rounds'] for r in results]
-errors = [r['error_rate'] for r in results]
-
-plt.figure(figsize=(10, 6))
-plt.plot(rounds, errors, 'o-', linewidth=2, markersize=8)
-plt.xlabel('Number of EPR Rounds', fontsize=12)
-plt.ylabel('Error Rate', fontsize=12)
-plt.title('Error Rate vs Number of EPR Rounds', fontsize=14)
-plt.xscale('log')
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig('output_epr_rounds_sweep.png', dpi=150)
-plt.show()
+    # Analyze results...
 ```
 
-## Sweeping Network Configuration Parameters
-
-You can vary parameters in the network itself:
+## Sweeping Classical Link Delays
 
 ```python
-# Sweep over classical link delay
-delays = np.logspace(0, 4, 10)  # 1 to 10000 ns
-latencies = []
+from squidasm.run.stack.config import CLinkConfig, DefaultCLinkConfig
+
+delays = np.logspace(0, 6, 20)  # 1 ns to 1 ms
 
 for delay in delays:
-    # Create classical link with varying delay
     clink = CLinkConfig(
         stack1="Alice",
         stack2="Bob",
         typ="default",
-        cfg=DefaultCLinkConfig(delay=delay),
+        cfg=DefaultCLinkConfig(delay=delay)
     )
     cfg.clinks = [clink]
     
-    # Run simulation
-    alice_program = AliceProgram()
-    bob_program = BobProgram()
-    
-    results_alice, results_bob = run(
-        config=cfg,
-        programs={"Alice": alice_program, "Bob": bob_program},
-        num_times=10,
-    )
-    
-    # Measure something (could be execution time, etc.)
-    latencies.append((delay, results_alice[0].get('execution_time', 0)))
-
-# Visualize
-delays_vals = [x[0] for x in latencies]
-times = [x[1] for x in latencies]
-
-plt.figure(figsize=(10, 6))
-plt.semilogx(delays_vals, times, 'o-', linewidth=2, markersize=8)
-plt.xlabel('Classical Link Delay (ns)', fontsize=12)
-plt.ylabel('Total Execution Time (ns)', fontsize=12)
-plt.title('Execution Time vs Classical Link Delay', fontsize=14)
-plt.grid(True, alpha=0.3, which='both')
-plt.tight_layout()
-plt.savefig('output_delay_sweep.png', dpi=150)
-plt.show()
+    # Run and measure execution time or other metrics...
 ```
 
-## Parallel Sweeping
+## Organizing Results
 
-For large parameter sweeps, consider running simulations in parallel:
+### Using DataFrames
 
 ```python
-from multiprocessing import Pool
-from functools import partial
+import pandas as pd
 
-def run_simulation(fidelity, cfg, epr_rounds):
-    """Helper function for parallel execution."""
-    from application import AliceProgram, BobProgram
-    from squidasm.run.stack.run import run
+# Collect results in a list of dictionaries
+data = []
+
+for fidelity in fidelities:
+    depolarise_config.fidelity = fidelity
     
-    # Update configuration for this fidelity
-    cfg.links[0].cfg.fidelity = fidelity
-    
-    # Create and run programs
-    alice_program = AliceProgram(num_epr_rounds=epr_rounds)
-    bob_program = BobProgram(num_epr_rounds=epr_rounds)
-    
-    results_alice, results_bob = run(
+    alice_results, bob_results = run(
         config=cfg,
-        programs={"Alice": alice_program, "Bob": bob_program},
-        num_times=20,
+        programs={"Alice": AliceProgram(), "Bob": BobProgram()},
+        num_times=50
     )
     
-    # Calculate error rate
-    errors = sum(
-        sum(results_alice[i]["measurements"][j] != results_bob[i]["measurements"][j]
-            for j in range(len(results_alice[i]["measurements"])))
-        for i in range(len(results_alice))
-    )
-    total = sum(len(results_alice[i]["measurements"]) for i in range(len(results_alice)))
-    error_rate = errors / total
+    error_rate = calculate_error_rate(alice_results, bob_results)
     
-    return (fidelity, error_rate)
+    data.append({
+        'fidelity': fidelity,
+        'error_rate': error_rate,
+        'num_iterations': 50,
+        'timestamp': pd.Timestamp.now()
+    })
 
-if __name__ == "__main__":
-    # Load configuration
-    cfg = StackNetworkConfig.from_file("config.yaml")
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Save to CSV
+df.to_csv('sweep_results.csv', index=False)
+
+# Analysis
+print(df.describe())
+print(f"Minimum error at fidelity: {df.loc[df['error_rate'].idxmin(), 'fidelity']}")
+```
+
+### Saving Intermediate Results
+
+```python
+import json
+import os
+
+results_file = 'sweep_checkpoint.json'
+
+# Load existing results if resuming
+if os.path.exists(results_file):
+    with open(results_file, 'r') as f:
+        results = json.load(f)
+else:
+    results = {}
+
+for fidelity in fidelities:
+    # Skip already computed
+    if str(fidelity) in results:
+        continue
     
-    # Define parameter range
-    fidelities = np.arange(0.5, 1.0, step=0.05)
+    # Run simulation...
+    error_rate = compute_error_rate(...)
     
-    # Run simulations in parallel
-    with Pool(processes=4) as pool:
-        run_func = partial(run_simulation, cfg=cfg, epr_rounds=10)
-        results = pool.map(run_func, fidelities)
+    # Save checkpoint
+    results[str(fidelity)] = error_rate
+    with open(results_file, 'w') as f:
+        json.dump(results, f)
+```
+
+## Statistical Analysis
+
+### Computing Confidence Intervals
+
+```python
+from scipy import stats
+
+def run_with_statistics(cfg, programs, fidelity, num_iterations=100, num_runs=10):
+    """Run multiple independent experiments and compute statistics."""
+    error_rates = []
     
-    # Plot results
-    fidelities_result = [x[0] for x in results]
-    errors = [x[1] for x in results]
+    for run in range(num_runs):
+        alice_results, bob_results = run(
+            config=cfg,
+            programs=programs,
+            num_times=num_iterations
+        )
+        error_rate = calculate_error_rate(alice_results, bob_results)
+        error_rates.append(error_rate)
     
-    plt.plot(fidelities_result, errors, 'o-')
-    plt.xlabel('Link Fidelity')
-    plt.ylabel('Error Rate')
-    plt.savefig('output_parallel_sweep.png')
-    plt.show()
+    mean = np.mean(error_rates)
+    std = np.std(error_rates, ddof=1)
+    ci = stats.t.interval(0.95, len(error_rates)-1, loc=mean, scale=std/np.sqrt(len(error_rates)))
+    
+    return {
+        'mean': mean,
+        'std': std,
+        'ci_lower': ci[0],
+        'ci_upper': ci[1]
+    }
+
+# Usage
+for fidelity in fidelities:
+    depolarise_config.fidelity = fidelity
+    stats = run_with_statistics(cfg, programs, fidelity)
+    print(f"F={fidelity:.2f}: {stats['mean']:.3f} ± {stats['std']:.3f}")
+```
+
+### Plotting with Error Bars
+
+```python
+means = [r['mean'] for r in results]
+stds = [r['std'] for r in results]
+
+plt.errorbar(fidelities, means, yerr=stds, fmt='o-', capsize=5)
+plt.fill_between(fidelities, 
+                  [m - s for m, s in zip(means, stds)],
+                  [m + s for m, s in zip(means, stds)],
+                  alpha=0.3)
+plt.xlabel('Link Fidelity')
+plt.ylabel('Error Rate')
+plt.title('Error Rate vs Fidelity (with std dev)')
+plt.savefig('error_bars.png')
+```
+
+## Utility Functions
+
+### Helper for Error Rate Calculation
+
+```python
+def calculate_error_rate(alice_results, bob_results):
+    """Calculate error rate from paired results."""
+    errors = 0
+    total = 0
+    
+    for a_res, b_res in zip(alice_results, bob_results):
+        a_meas = a_res.get("measurements", [])
+        b_meas = b_res.get("measurements", [])
+        
+        # Handle different array lengths
+        min_len = min(len(a_meas), len(b_meas))
+        errors += sum(a_meas[i] != b_meas[i] for i in range(min_len))
+        total += min_len
+    
+    return errors / total if total > 0 else 0.0
+```
+
+### Helper for Configuration Updates
+
+```python
+def update_link_fidelity(cfg, fidelity):
+    """Update link fidelity in configuration."""
+    for link in cfg.links:
+        if hasattr(link.cfg, 'fidelity'):
+            link.cfg.fidelity = fidelity
+
+def update_device_noise(cfg, single_qubit_prob, two_qubit_prob):
+    """Update device noise parameters for all stacks."""
+    for stack in cfg.stacks:
+        if hasattr(stack.qdevice_cfg, 'single_qubit_gate_depolar_prob'):
+            stack.qdevice_cfg.single_qubit_gate_depolar_prob = single_qubit_prob
+            stack.qdevice_cfg.two_qubit_gate_depolar_prob = two_qubit_prob
 ```
 
 ## Best Practices
 
-### 1. Use Descriptive Naming
+### 1. Document Your Sweeps
+
+```python
+"""
+Parameter Sweep: Link Fidelity vs Error Rate
+============================================
+Date: 2025-01-15
+Author: Your Name
+
+Configuration:
+- Device: Generic with T1=1e6, T2=8e5
+- Link: Depolarise with t_cycle=10, prob_success=0.8
+- Classical Link: Instant
+
+Parameters:
+- Fidelity range: [0.5, 0.95], step=0.05
+- Iterations per fidelity: 50
+- EPR rounds per iteration: 10
+
+Expected: Error rate decreases monotonically with fidelity
+"""
+```
+
+### 2. Use Meaningful Variable Names
 
 ```python
 # Good
-high_fidelity_results = []
-low_noise_config = cfg.copy()
+fidelity_sweep_results = []
+error_rate_vs_fidelity = {}
 
 # Avoid
 results1 = []
-cfg2 = cfg
+data = {}
 ```
 
-### 2. Store Results Systematically
+### 3. Validate Results
 
 ```python
-# Good: Use dictionaries with meaningful keys
-results = {
-    'fidelity': fidelities,
-    'error_rates': errors,
-    'std_errors': standard_errors,
-}
+# Sanity checks
+assert all(0 <= r['error_rate'] <= 1 for r in results), "Invalid error rates"
+assert len(results) == len(fidelities), "Missing results"
 
-# Or use dataclasses
-from dataclasses import dataclass
-
-@dataclass
-class SweepResult:
-    parameter_value: float
-    error_rate: float
-    execution_time: float
-```
-
-### 3. Save Intermediate Results
-
-```python
-import json
-
-# Save results as sweep progresses
-for fidelity in fidelities:
-    # ... run simulation ...
-    
-    # Save after each iteration
-    with open('sweep_results.json', 'w') as f:
-        json.dump(error_rate_results, f)
-```
-
-### 4. Document Your Sweeps
-
-```python
-"""
-Sweep: Fidelity vs Error Rate
-==============================
-Configuration: Perfect links with perfect devices
-Application: Bell state measurement with Hadamard
-Parameters: Fidelity range [0.5, 0.95], step 0.05
-Iterations: 20 per fidelity value
-EPR Pairs per iteration: 10
-
-Expected behavior: Error rate should decrease monotonically 
-with increasing fidelity.
-"""
+# Check monotonicity if expected
+error_rates = [r['error_rate'] for r in sorted(results, key=lambda x: x['fidelity'])]
+is_monotonic = all(error_rates[i] >= error_rates[i+1] 
+                   for i in range(len(error_rates)-1))
+if not is_monotonic:
+    print("Warning: Error rate is not monotonically decreasing with fidelity")
 ```
 
 ## Summary
 
 In this section you learned:
 
-- How to **vary a single parameter** (e.g., link fidelity) and analyze results
-- How to **multi-parameter sweep** using `itertools.product()`
-- How to **sweep application parameters** like number of EPR pairs
-- How to **sweep network parameters** like classical link delays
-- How to use **parallel processing** for faster sweeps
-- **Best practices** for organizing and storing results
+- **Single parameter sweeps** for link fidelity and other parameters
+- **Multi-parameter sweeps** using `itertools.product`
+- **Device parameter sweeps** for T1, T2, and gate noise
+- **Application parameter sweeps** for program inputs
+- **Organizing results** with DataFrames and checkpointing
+- **Statistical analysis** with confidence intervals
+- **Best practices** for documentation and validation
 
 Parameter sweeping is essential for:
-
-- Understanding how noise affects protocol performance
+- Understanding protocol behavior under different conditions
 - Optimizing network configurations
-- Validating theoretical predictions against simulations
-- Finding parameter regimes where protocols remain functional
-- Benchmarking different implementations
+- Validating theoretical models
+- Identifying parameter thresholds for protocol operation
 
-The combination of SquidASM's flexible configuration system and Python's data analysis tools makes it straightforward to systematically explore the parameter space of quantum network protocols.
+## Next Steps
+
+- [API Reference](../api/index.md) - Detailed API documentation
+- [Advanced Topics](../advanced/index.md) - Custom protocols and noise models

@@ -1,307 +1,330 @@
 # Tutorial 1: Basics
 
-In this section you will be introduced to the basics of sending and receiving both classical and quantum information, as well as the first steps of writing programs and manipulating Qubits.
+This tutorial covers the fundamental concepts you need to know to get started with SquidASM.
 
-This chapter of the tutorial takes the user through the example `examples/tutorial/1_Basics`. This chapter will focus only on the `application.py` file.
+## Overview
 
-## Running the Example
+SquidASM is a high-level interface for simulating quantum network applications using the NetSquid simulator. The core workflow involves:
 
-To run this example, first make the example directory the active directory:
+1. **Writing a Program** - Subclass `Program` to define your quantum network application
+2. **Configuring a Network** - Use YAML or Python to define network topology
+3. **Running Simulations** - Execute programs across multiple network nodes
 
-```bash
-cd examples/tutorial/1_Basics
-```
+## Writing Your First Program
 
-Afterwards run the simulation using:
+Every SquidASM application starts by defining a `Program`. Each node in your network runs a program that can:
 
-```bash
-python3 run_simulation.py
-```
+- Create and manipulate qubits
+- Generate entanglement with remote nodes
+- Send and receive classical messages
 
-All examples are fully functional and can be executed immediately.
+### The Program Class
 
-## Application Basics
-
-### Programs vs Applications
-
-In this section we will explain the basics of writing an application for SquidASM. We define separate meanings to program and application:
-
-- **Program**: The code running on a single node
-- **Application**: The complete set of programs to achieve a specific purpose
-
-For example, BQC (Blind Quantum Computing) is an application, but it consists of two programs: one program for the client and another for the server.
-
-In this tutorial we will be creating an `AliceProgram` and a `BobProgram` that will run on Alice and Bob nodes respectively.
-
-### Program Structure
-
-Both the Alice and Bob program start with an unpacking of a `ProgramContext` object into:
-
-- `csocket` (a classical socket)
-- `epr_socket` (an EPR socket)
-- `connection` (a NetQASM connection)
-
-Here's the basic structure of `AliceProgram`:
+Here's the basic structure of a SquidASM program:
 
 ```python
 from squidasm.sim.stack.program import Program, ProgramContext, ProgramMeta
 
-class AliceProgram(Program):
-    PEER_NAME = "Bob"
+class MyProgram(Program):
+    PEER_NAME = "Partner"  # Name of the remote node
     
-    @staticmethod
-    def meta() -> ProgramMeta:
+    @property
+    def meta(self) -> ProgramMeta:
+        """Define program metadata including qubit requirements."""
         return ProgramMeta(
-            name="Alice",
-            csockets=[AliceProgram.PEER_NAME],
-            epr_sockets=[(AliceProgram.PEER_NAME, 1)],
+            name="my_program",
+            csockets=[self.PEER_NAME],    # Classical sockets needed
+            epr_sockets=[self.PEER_NAME], # EPR sockets needed
+            max_qubits=2                   # Maximum qubits this program will use
         )
     
-    def run(self, context: ProgramContext) -> Generator:
-        csocket = context.csockets[self.PEER_NAME]
-        epr_socket = context.epr_sockets[(self.PEER_NAME, 0)]
+    def run(self, context: ProgramContext):
+        """Main program logic - executed on the quantum network node."""
+        # Access the network connection
         connection = context.connection
         
-        # Program logic here
+        # Access classical socket for messaging
+        csocket = context.csockets[self.PEER_NAME]
+        
+        # Access EPR socket for entanglement
+        epr_socket = context.epr_sockets[self.PEER_NAME]
+        
+        # Your quantum program logic here
+        return {}
 ```
 
-### Understanding the Context
+### Key Components Explained
 
-Three key concepts in SquidASM programs:
+#### ProgramMeta
 
-1. **Host and QNPU**: The program runs on a host (classical computer) which is connected to a Quantum Network Processing Unit (QNPU) responsible for local qubit operations and EPR pair generation with remote nodes.
+The `meta` property (note: it's a `@property`, not a `@staticmethod`) returns a `ProgramMeta` object that describes:
 
-2. **NetQASM Connection**: The variable `connection` represents the NetQASM connection between the host and QNPU. It is used to communicate all instructions regarding qubit operations and entanglement generation.
+- **`name`**: Identifier for the program
+- **`csockets`**: List of node names for classical communication
+- **`epr_sockets`**: List of node names for EPR pair generation
+- **`max_qubits`**: Maximum number of qubits your program will use simultaneously (important for resource allocation)
 
-3. **Classical Socket**: The `csocket` is a classical socket that represents an endpoint for sending and receiving data across a network to the socket of another node. Note that the socket connects to one specific other node. The classical socket can be used to send classical information to the host of another node.
+#### ProgramContext
 
-4. **EPR Socket**: The `epr_socket` is a socket for generating entangled qubits on both nodes. Behind the scenes, the communication requests are sent to the quantum network processing unit.
+When `run()` is called, it receives a `ProgramContext` providing:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Application Layer (Program)                                 │
-│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
-│ │ Classical    │  │ EPR Socket   │  │ Qubit Ops    │        │
-│ │ Socket       │  │              │  │ via          │        │
-│ │              │  │              │  │ Connection   │        │
-│ └──────────────┘  └──────────────┘  └──────────────┘        │
-└──────────────────────────────────────────────────────────────┘
-                          ↓
-┌──────────────────────────────────────────────────────────────┐
-│ Host (Classical Computer)                                    │
-└──────────────────────────────────────────────────────────────┘
-                          ↓
-┌──────────────────────────────────────────────────────────────┐
-│ NetQASM Connection                                           │
-└──────────────────────────────────────────────────────────────┘
-                          ↓
-┌──────────────────────────────────────────────────────────────┐
-│ QNPU (Quantum Network Processing Unit)                       │
-│ ┌──────────────┐  ┌──────────────┐                          │
-│ │ Local Qubits │  │ EPR Gen      │                          │
-│ │ & Gates      │  │ with Remote  │                          │
-│ └──────────────┘  └──────────────┘                          │
-└──────────────────────────────────────────────────────────────┘
-```
+- **`connection`**: The NetQASM connection for quantum operations
+- **`csockets`**: Dictionary mapping peer names to classical sockets
+- **`epr_sockets`**: Dictionary mapping peer names to EPR sockets
+- **`app_config`**: Application-specific configuration data
 
-**Important Note**: Most NetQASM objects, such as qubits and EPR sockets, are initialized using a NetQASM connection and they store this NetQASM connection reference internally. These objects then forward instructions to a NetQASM connection behind the scenes.
+### Accessing Sockets
 
-## Sending Classical Information
-
-Classical information is sent via the `Socket` object from `netqasm.sdk`. The Socket objects represent an open connection to a peer.
-
-### Alice's Side (Sending)
-
-Sending a classical message to a peer is done by using the `send()` method of the classical socket:
+Sockets are accessed using the peer node name as the key:
 
 ```python
-# Alice sends a message
-csocket.send("Hello")
-print("Alice sends message: Hello")
+# Correct way to access sockets
+csocket = context.csockets[self.PEER_NAME]     # Using the peer name directly
+epr_socket = context.epr_sockets[self.PEER_NAME]
+
+# Example with explicit name
+csocket = context.csockets["Bob"]
+epr_socket = context.epr_sockets["Alice"]
 ```
 
-### Bob's Side (Receiving)
+## Working with Qubits
 
-For Bob to receive the message, he must be waiting for a classical message at the same time using the `recv()` method:
+### Creating Local Qubits
 
-```python
-# Bob receives a message
-message = yield from csocket.recv()
-print(f"Bob receives message {message}")
-```
-
-**Important**: It is mandatory to include the `yield from` keywords when receiving messages for the application to work with SquidASM.
-
-### Expected Output
-
-Running the simulation should result in:
-
-```
-Alice sends message: Hello
-Bob receives message: Hello
-```
-
-## Creating EPR Pairs Between Nodes
-
-Creating an EPR pair follows a similar pattern as classical communication: Alice must register a request using `create_keep()` to generate an EPR pair, while Bob needs to be listening to such a request using `recv_keep()`.
-
-### Alice's Side (Creating)
-
-```python
-# Request to create an EPR pair
-q = (yield from epr_socket.create_keep(1))[0]
-
-# Apply Hadamard gate
-q.H()
-
-# Measure the qubit
-result = q.measure()
-
-# Send to QNPU and get results
-yield from connection.flush()
-
-print(f"Alice measures local EPR qubit: {result}")
-```
-
-### Bob's Side (Receiving)
-
-```python
-# Wait for and receive EPR pair
-q = (yield from epr_socket.recv_keep(1))[0]
-
-# Apply Hadamard gate
-q.H()
-
-# Measure the qubit
-result = q.measure()
-
-# Send to QNPU and get results
-yield from connection.flush()
-
-print(f"Bob measures local EPR qubit: {result}")
-```
-
-### EPR Pair Properties
-
-Both `create_keep()` and `recv_keep()` return a list of qubits, so we select the local EPR qubit using `[0]`.
-
-By default the request only creates a single EPR pair, but a request for multiple EPR pairs may be placed using `create_keep(number=n)`.
-
-### Expected Output
-
-Running the simulation results in either:
-
-```
-Alice measures local EPR qubit: 0
-Bob measures local EPR qubit: 0
-```
-
-or:
-
-```
-Alice measures local EPR qubit: 1
-Bob measures local EPR qubit: 1
-```
-
-**Note**: The EPR pairs as presented to the application are in the state $\ket{\Phi^+} = \frac{1}{\sqrt{2}}(\ket{00} + \ket{11})$. Behind the scenes the EPR pair might have been initially generated in a different Bell state, but by applying the appropriate Pauli gates on both nodes, the state will be transformed into the $\ket{\Phi^+}$ state.
-
-## Creating Local Qubits
-
-It is possible to request and use local qubits without generating entanglement with a remote node. This is done by initializing a `Qubit` object from `netqasm.sdk.qubit`.
-
-This initialization requires the user to pass the NetQASM connection, as instructions need to be sent to the QNPU that a particular qubit is reset and marked as in use. We can use the `Qubit` object to create an EPR pair with both qubits on the same node:
+To create and manipulate a local qubit:
 
 ```python
 from netqasm.sdk.qubit import Qubit
 
-# Create two local qubits
-q0 = Qubit(connection)
-q1 = Qubit(connection)
-
-# Initialize the qubits
-q0.X()
-q1.X()
-
-# Apply Hadamard to first qubit to entangle them (CNOT-like operation)
-q0.H()
-q0.cnot(q1)
-
-# Measure both qubits
-m0 = q0.measure()
-m1 = q1.measure()
-
-# Send to QNPU and get results
-yield from connection.flush()
-
-print(f"Alice measures local qubits: {m0}, {m1}")
+def run(self, context: ProgramContext):
+    connection = context.connection
+    
+    # Create a new qubit (initialized to |0⟩)
+    q = Qubit(connection)
+    
+    # Apply quantum gates
+    q.H()      # Hadamard gate: |0⟩ → |+⟩
+    q.X()      # Pauli-X gate (NOT)
+    q.Y()      # Pauli-Y gate
+    q.Z()      # Pauli-Z gate
+    q.T()      # T gate
+    q.S()      # S gate
+    
+    # Rotations (angle in units of π/16)
+    q.rot_X(n=8, d=1)  # Rotate around X axis: n * π / (2^d)
+    q.rot_Y(n=4, d=2)  # Rotate around Y axis
+    q.rot_Z(n=2, d=0)  # Rotate around Z axis
+    
+    # Two-qubit gates
+    q2 = Qubit(connection)
+    q.cnot(q2)   # CNOT with q as control, q2 as target
+    q.cphase(q2) # Controlled-Z gate
+    
+    # Measurement
+    result = q.measure()
+    
+    # Flush to execute all operations
+    connection.flush()
+    
+    # Access measurement result (after flush)
+    outcome = int(result)
+    return {"measurement": outcome}
 ```
 
-### Result
+### Creating Bell Pairs
 
-The result of this code segment is either:
-
-```
-Alice measures local qubits: 0, 0
-```
-
-or:
-
-```
-Alice measures local qubits: 1, 1
-```
-
-## Qubit Gates
-
-The `Qubit` object supports a large selection of operations:
-
-### Single Qubit Gates
-
-- **Pauli gates**: `X()`, `Y()`, `Z()`
-- **Clifford gates**: `T()`, `H()`, `K()`, `S()`
-
-### Qubit Rotations
-
-- **Rotation operators**: `rot_X(n, d)`, `rot_Y(n, d)`, `rot_Z(n, d)`
-  - These specify the magnitude of rotation via parameters n and d: $\frac{n\pi}{2^d}$
-  - For example, `rot_Z(1, 2)` rotates by $\frac{\pi}{4}$
-
-### Multi-Qubit Operations
-
-- **CNOT**: `cnot(target)` - Control-NOT gate where the control qubit is the qubit invoking the operation
-- **CPhase**: `cphase(target)` - Controlled-Phase gate
-
-### Using Gates
+To create entanglement with a remote node:
 
 ```python
-q = Qubit(connection)
-
-# Single qubit gates
-q.X()          # Pauli X
-q.Y()          # Pauli Y
-q.Z()          # Pauli Z
-q.H()          # Hadamard
-q.S()          # S gate
-q.T()          # T gate
-
-# Rotations
-q.rot_X(3, 2)  # Rotate around X by 3π/4
-q.rot_Y(1, 2)  # Rotate around Y by π/4
-q.rot_Z(1, 1)  # Rotate around Z by π/2
-
-# Multi-qubit operations
-q.cnot(q_target)    # CNOT
-q.cphase(q_target)  # Controlled Phase
+def run(self, context: ProgramContext):
+    connection = context.connection
+    epr_socket = context.epr_sockets[self.PEER_NAME]
+    
+    # Create an EPR pair - returns the local qubit
+    q_entangled = epr_socket.create_keep()[0]
+    
+    # Or receive an EPR pair initiated by remote node
+    q_received = epr_socket.recv_keep()[0]
+    
+    # The qubits are now entangled in the |Φ+⟩ Bell state
+    result = q_entangled.measure()
+    connection.flush()
+    
+    return {"result": int(result)}
 ```
 
-## Summary
+## Classical Communication
 
-In this section you learned:
+Classical sockets allow you to send messages between nodes:
 
-- How to structure a basic SquidASM program with programs and applications
-- How to access classical sockets, EPR sockets, and the NetQASM connection from ProgramContext
-- How to send and receive classical messages
-- How to generate and measure EPR pairs
-- How to create and manipulate local qubits
-- How to apply quantum gates to qubits
+```python
+def run(self, context: ProgramContext):
+    csocket = context.csockets[self.PEER_NAME]
+    
+    # Send a message (string)
+    csocket.send("Hello from Alice!")
+    
+    # Receive a message
+    message = yield from csocket.recv()
+    
+    # Send structured data (will be converted to string)
+    csocket.send(str(42))
+    
+    return {"received": message}
+```
 
-The next section will explain the NetQASM language in more detail, particularly the concept of instruction queues and Future objects.
+**Important**: Use `yield from` when receiving classical messages, as this is an asynchronous operation.
+
+## Complete Example: Quantum Teleportation
+
+Here's a complete example showing Alice teleporting a qubit state to Bob:
+
+### Alice's Program
+
+```python
+from squidasm.sim.stack.program import Program, ProgramContext, ProgramMeta
+from netqasm.sdk.qubit import Qubit
+
+class AliceProgram(Program):
+    PEER_NAME = "Bob"
+    
+    @property
+    def meta(self) -> ProgramMeta:
+        return ProgramMeta(
+            name="alice_teleport",
+            csockets=[self.PEER_NAME],
+            epr_sockets=[self.PEER_NAME],
+            max_qubits=2
+        )
+    
+    def run(self, context: ProgramContext):
+        connection = context.connection
+        csocket = context.csockets[self.PEER_NAME]
+        epr_socket = context.epr_sockets[self.PEER_NAME]
+        
+        # Create the qubit to teleport (in state |+⟩)
+        q_to_send = Qubit(connection)
+        q_to_send.H()
+        
+        # Create EPR pair with Bob
+        q_entangled = epr_socket.create_keep()[0]
+        
+        # Teleportation circuit
+        q_to_send.cnot(q_entangled)
+        q_to_send.H()
+        
+        # Measure both qubits
+        m1 = q_to_send.measure()
+        m2 = q_entangled.measure()
+        connection.flush()
+        
+        # Send corrections to Bob
+        csocket.send(f"{int(m1)},{int(m2)}")
+        
+        return {"m1": int(m1), "m2": int(m2)}
+```
+
+### Bob's Program
+
+```python
+class BobProgram(Program):
+    PEER_NAME = "Alice"
+    
+    @property
+    def meta(self) -> ProgramMeta:
+        return ProgramMeta(
+            name="bob_teleport",
+            csockets=[self.PEER_NAME],
+            epr_sockets=[self.PEER_NAME],
+            max_qubits=1
+        )
+    
+    def run(self, context: ProgramContext):
+        connection = context.connection
+        csocket = context.csockets[self.PEER_NAME]
+        epr_socket = context.epr_sockets[self.PEER_NAME]
+        
+        # Receive EPR pair from Alice
+        q_received = epr_socket.recv_keep()[0]
+        
+        # Receive classical corrections
+        msg = yield from csocket.recv()
+        m1, m2 = msg.split(",")
+        
+        # Apply corrections
+        if int(m2) == 1:
+            q_received.X()
+        if int(m1) == 1:
+            q_received.Z()
+        
+        # Measure the teleported qubit
+        result = q_received.measure()
+        connection.flush()
+        
+        return {"teleported_measurement": int(result)}
+```
+
+## Running the Simulation
+
+To run your programs, you need to configure a network and execute the simulation:
+
+```python
+from squidasm.run.stack.config import StackNetworkConfig
+from squidasm.run.stack.run import run
+
+# Load network configuration from YAML
+config = StackNetworkConfig.from_file("config.yaml")
+
+# Run the simulation
+results = run(
+    config=config,
+    programs={"Alice": AliceProgram(), "Bob": BobProgram()},
+    num_times=1
+)
+
+# Process results
+alice_results, bob_results = results
+print(f"Alice: {alice_results}")
+print(f"Bob: {bob_results}")
+```
+
+### Network Configuration (config.yaml)
+
+```yaml
+stacks:
+  - name: Alice
+    qdevice_typ: generic
+    qdevice_cfg:
+      num_qubits: 2
+  - name: Bob
+    qdevice_typ: generic
+    qdevice_cfg:
+      num_qubits: 2
+
+links:
+  - stack1: Alice
+    stack2: Bob
+    typ: depolarise
+    cfg:
+      fidelity: 0.95
+      t_cycle: 10
+
+clinks:
+  - stack1: Alice
+    stack2: Bob
+```
+
+## Key Takeaways
+
+1. **Always use `@property`** for the `meta` method, not `@staticmethod`
+2. **Access sockets by peer name**: `context.csockets["Bob"]` not `context.csockets[("Bob", 0)]`
+3. **Specify `max_qubits`** in `ProgramMeta` for proper resource allocation
+4. **Use `yield from`** for receiving classical messages
+5. **Call `connection.flush()`** before reading measurement results
+6. **EPR operations return lists**: Use `[0]` to get the first qubit
+
+## Next Steps
+
+- [Tutorial 2: NetQASM](2_netqasm.md) - Learn about the underlying instruction set
+- [Tutorial 3: Simulation Control](3_simulation_control.md) - Advanced simulation features
+- [Tutorial 4: Network Configuration](4_network_configuration.md) - Detailed network setup

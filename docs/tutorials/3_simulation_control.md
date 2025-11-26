@@ -1,12 +1,10 @@
 # Tutorial 3: Simulation Control
 
-In this section we explain the `run_simulation.py` file and the interface that programs in `application.py` must adhere to. We also cover ways to get output results from the program and logging.
-
-The first sections will use the example `examples/tutorial/1_Basics` for code snippets.
+In this section we explain the `run_simulation.py` file and the interface that programs in `application.py` must adhere to. We also cover ways to get output results from the program, application configuration, and logging.
 
 ## Basic run_simulation.py
 
-The `examples/tutorial/1_Basics/run_simulation.py` file contains the minimal requirements to run a simulation:
+The minimal `run_simulation.py` file contains:
 
 ```python
 from application import AliceProgram, BobProgram
@@ -14,373 +12,461 @@ from application import AliceProgram, BobProgram
 from squidasm.run.stack.config import StackNetworkConfig
 from squidasm.run.stack.run import run
 
-# import network configuration from file
+# Load network configuration from file
 cfg = StackNetworkConfig.from_file("config.yaml")
 
 # Create instances of programs to run
 alice_program = AliceProgram()
 bob_program = BobProgram()
 
-# Run the simulation. Programs argument is a mapping of network node labels to programs to run on that node
+# Run the simulation
+# Programs argument maps network node labels to programs
 run(config=cfg, programs={"Alice": alice_program, "Bob": bob_program}, num_times=1)
 ```
 
 ### Components
 
-In the `run_simulation.py` file:
-
 1. **Import programs** - Import the `AliceProgram` and `BobProgram` classes
-2. **Load configuration** - Load the network configuration from a YAML file into a variable
+2. **Load configuration** - Load the network configuration from YAML into a variable
 3. **Create instances** - Create instances of the programs
-4. **Map programs to nodes** - Use a Python dictionary mapping node names to program instances
-5. **Run simulation** - Pass both the network configuration and node-program mapping to the `run()` function
+4. **Map programs to nodes** - Dictionary mapping node names to program instances
+5. **Run simulation** - Pass configuration and program mapping to `run()`
 
-### Important Note
+### Important Note: Name Consistency
 
-The node names are used in multiple locations across the various files. All the names must match for the simulation to work:
+Node names must match across all files:
 
 - Node names in `config.yaml` (under `stacks`)
-- Node names in program socket declarations (e.g., `self.PEER_NAME = "Bob"`)
+- Node names in program socket declarations (`self.PEER_NAME = "Bob"`)
 - Node names in the `programs` dictionary in `run_simulation.py`
-
-### Program Class Flexibility
-
-There is no restriction that the program classes must be different per node; only the instances need to be different. Instead of using different classes, it is possible to use a single class and set a flag in one of the program instances that defines its role in the application.
 
 ## Program Interface
 
-The largest difference with the NetQASM SDK are the interface requirements that programs must adhere to. Programs must have two requirements:
+Programs must subclass `Program` and implement two requirements:
 
-1. A `meta()` method that returns a `ProgramMeta` object
+1. A `meta` **property** that returns a `ProgramMeta` object
 2. A `run()` method that accepts a `ProgramContext` object
 
-### The Program Abstract Base Class
+### The Program Base Class
 
 ```python
 from squidasm.sim.stack.program import Program, ProgramContext, ProgramMeta
-from typing import Generator
+from typing import Generator, Dict, Any
 
-class Program:
-    """Abstract base class for quantum network applications."""
+class MyProgram(Program):
+    """Example quantum network application."""
     
-    @staticmethod
-    def meta() -> ProgramMeta:
-        """Declare program requirements (sockets, etc.)."""
-        raise NotImplementedError
+    @property
+    def meta(self) -> ProgramMeta:
+        """Declare program requirements (sockets, qubits, etc.)."""
+        return ProgramMeta(
+            name="my_program",
+            csockets=["Bob"],          # Classical sockets needed
+            epr_sockets=["Bob"],       # EPR sockets needed
+            max_qubits=2               # Maximum qubits used
+        )
     
-    def run(self, context: ProgramContext) -> Generator:
+    def run(self, context: ProgramContext) -> Generator[None, None, Dict[str, Any]]:
         """Execute the program."""
-        raise NotImplementedError
+        # Implementation here
+        return {}
 ```
 
-### ProgramMeta and ProgramContext
+**Important**: The `meta` method is a `@property`, not a `@staticmethod`. This allows accessing instance attributes like `self.PEER_NAME`.
 
-The `ProgramMeta` object declares what the program needs, and the `ProgramContext` provides those resources.
+### ProgramMeta Fields
 
-For example, if the `ProgramMeta` declares:
+The `ProgramMeta` object declares program requirements:
 
 ```python
-@staticmethod
-def meta() -> ProgramMeta:
+@property
+def meta(self) -> ProgramMeta:
     return ProgramMeta(
-        name="Alice",
-        csockets=["Bob"],  # Need classical socket to Bob
-        epr_sockets=[("Bob", 1)],  # Need EPR socket with Bob for 1 pair
+        name="alice",           # Program identifier
+        csockets=["Bob"],       # List of peer names for classical sockets
+        epr_sockets=["Bob"],    # List of peer names for EPR sockets
+        max_qubits=2            # Maximum qubits this program uses
     )
 ```
 
-Then inside the `run()` method, you can access these resources:
+**Important**: Always specify `max_qubits` for proper resource allocation in the simulator.
+
+### ProgramContext Resources
+
+The `ProgramContext` provides access to network resources:
 
 ```python
-def run(self, context: ProgramContext) -> Generator:
-    csocket = context.csockets["Bob"]  # Classical socket to Bob
-    epr_socket = context.epr_sockets[("Bob", 0)]  # EPR socket to Bob
-    connection = context.connection  # NetQASM connection
+def run(self, context: ProgramContext):
+    # NetQASM connection for quantum operations
+    connection = context.connection
     
-    # Use these resources...
+    # Classical socket - accessed by peer name
+    csocket = context.csockets["Bob"]
+    
+    # EPR socket - accessed by peer name (not tuple!)
+    epr_socket = context.epr_sockets["Bob"]
+    
+    # Application configuration (from config or run parameters)
+    app_config = context.app_config
 ```
 
-### Example Program
+### Socket Access Pattern
 
-Here's the `AliceProgram` from the basics tutorial:
+Sockets are accessed using the peer name as a string key:
 
 ```python
+# Correct way
+csocket = context.csockets[self.PEER_NAME]
+epr_socket = context.epr_sockets[self.PEER_NAME]
+
+# NOT like this (incorrect tuple access)
+# epr_socket = context.epr_sockets[("Bob", 0)]  # Wrong!
+```
+
+### Complete Example Program
+
+```python
+from squidasm.sim.stack.program import Program, ProgramContext, ProgramMeta
+from netqasm.sdk.qubit import Qubit
+
 class AliceProgram(Program):
     PEER_NAME = "Bob"
     
-    @staticmethod
-    def meta() -> ProgramMeta:
+    @property
+    def meta(self) -> ProgramMeta:
         return ProgramMeta(
-            name="Alice",
-            csockets=[AliceProgram.PEER_NAME],
-            epr_sockets=[(AliceProgram.PEER_NAME, 1)],
+            name="alice",
+            csockets=[self.PEER_NAME],
+            epr_sockets=[self.PEER_NAME],
+            max_qubits=2
         )
     
-    def run(self, context: ProgramContext) -> Generator:
-        csocket = context.csockets[AliceProgram.PEER_NAME]
-        epr_socket = context.epr_sockets[(AliceProgram.PEER_NAME, 0)]
+    def run(self, context: ProgramContext):
+        csocket = context.csockets[self.PEER_NAME]
+        epr_socket = context.epr_sockets[self.PEER_NAME]
         connection = context.connection
         
         # Send classical message
         csocket.send("Hello")
         
         # Create and measure EPR pair
-        q = (yield from epr_socket.create_keep(1))[0]
+        q = epr_socket.create_keep()[0]
         q.H()
         result = q.measure()
-        yield from connection.flush()
+        connection.flush()
         
-        print(f"Alice measures local EPR qubit: {result}")
+        return {"result": int(result)}
 ```
 
-### Multi-Node Note
+## Application Configuration
 
-While currently unsupported, for multi-node applications it would be required to specify the other node names for the classical and EPR sockets in `ProgramMeta`.
+You can pass configuration data to your programs at runtime using `app_config`:
+
+### Defining Application Configuration
+
+In your YAML configuration file, add an `app` section to each stack:
+
+```yaml
+stacks:
+  - name: Alice
+    qdevice_typ: generic
+    qdevice_cfg:
+      num_qubits: 2
+    app:
+      role: "sender"
+      num_rounds: 10
+      
+  - name: Bob
+    qdevice_typ: generic
+    qdevice_cfg:
+      num_qubits: 2
+    app:
+      role: "receiver"
+      num_rounds: 10
+```
+
+### Accessing Application Configuration
+
+In your program, access the configuration via `context.app_config`:
+
+```python
+def run(self, context: ProgramContext):
+    # Access application configuration
+    app_config = context.app_config
+    
+    role = app_config.get("role", "default")
+    num_rounds = app_config.get("num_rounds", 1)
+    
+    if role == "sender":
+        # Sender logic
+        pass
+    else:
+        # Receiver logic
+        pass
+```
+
+### Benefits of app_config
+
+- **Separation of concerns**: Keep configuration separate from code
+- **Reusable programs**: Same program class can behave differently based on config
+- **Parameter sweeping**: Easy to vary parameters across runs
 
 ## Getting Output from Programs
 
-To evaluate the performance of an application, we often run it for multiple iterations with possibly multiple parameters and network configurations. This section shows how to send output from a program to `run_simulation.py`.
+### Return Dictionary
 
-### Example: EPR Fidelity Testing
-
-In `examples/tutorial/3.1_output` we create an application that generates EPR pairs, applies a Hadamard gate, and measures them:
+Programs return results via a dictionary at the end of the `run()` method:
 
 ```python
-class AliceProgram(Program):
-    PEER_NAME = "Bob"
+def run(self, context: ProgramContext):
+    # ... program logic ...
     
-    def __init__(self, num_epr_rounds: int = 1):
-        self.num_epr_rounds = num_epr_rounds
+    result = q.measure()
+    connection.flush()
     
-    @staticmethod
-    def meta() -> ProgramMeta:
-        return ProgramMeta(
-            name="Alice",
-            csockets=[AliceProgram.PEER_NAME],
-            epr_sockets=[(AliceProgram.PEER_NAME, AliceProgram.num_epr_rounds)],
-        )
-    
-    def run(self, context: ProgramContext) -> Generator:
-        csocket = context.csockets[self.PEER_NAME]
-        epr_socket = context.epr_sockets[(self.PEER_NAME, 0)]
-        connection = context.connection
-        
-        measurements = []
-        
-        for i in range(self.num_epr_rounds):
-            # Create EPR pair
-            q = (yield from epr_socket.create_keep(1))[0]
-            q.H()
-            m = q.measure()
-            yield from connection.flush()
-            measurements.append(int(m))
-        
-        # Send Bob our measurements for comparison
-        csocket.send(measurements)
-        bob_measurements = yield from csocket.recv()
-        
-        # Return results
-        return {"measurements": measurements}
+    # Return results dictionary
+    return {
+        "measurement": int(result),
+        "timestamp": context.connection.get_simulation_time()
+    }
 ```
-
-The program for Bob is identical, except it uses `recv_keep()` instead of `create_keep()`.
 
 ### Accessing Results in run_simulation.py
 
-The program may return a dictionary of various outputs at the end of the program using the `return` command. These dictionaries are returned to the `run_simulation.py` file as the return of the `run()` function.
-
 ```python
-from application import AliceProgram, BobProgram
 from squidasm.run.stack.config import StackNetworkConfig
 from squidasm.run.stack.run import run
-import numpy as np
 
-# Load configuration
 cfg = StackNetworkConfig.from_file("config.yaml")
 
-# Set parameters
-epr_rounds = 10
-alice_program = AliceProgram(num_epr_rounds=epr_rounds)
-bob_program = BobProgram(num_epr_rounds=epr_rounds)
+alice_program = AliceProgram()
+bob_program = BobProgram()
 
 # Run simulation multiple times
-simulation_iterations = 20
-results_alice, results_bob = run(
+results = run(
     config=cfg,
     programs={"Alice": alice_program, "Bob": bob_program},
-    num_times=simulation_iterations,
+    num_times=10
 )
+
+# Results structure: List[List[Dict]]
+# results[node_index][iteration_index] = returned dictionary
+alice_results, bob_results = results
 
 # Process results
-alice_measurements = [results_alice[i]["measurements"] for i in range(simulation_iterations)]
-bob_measurements = [results_bob[i]["measurements"] for i in range(simulation_iterations)]
-
-# Calculate error rate
-errors = sum(
-    sum(am != bm for am, bm in zip(alice_m, bob_m))
-    for alice_m, bob_m in zip(alice_measurements, bob_measurements)
-)
-total = sum(len(m) for m in alice_measurements)
-error_rate = errors / total
-
-print(f"Average error rate: {error_rate * 100:.1f}% using {total} EPR requests")
+for i, (alice_r, bob_r) in enumerate(zip(alice_results, bob_results)):
+    print(f"Iteration {i}: Alice={alice_r['measurement']}, Bob={bob_r['measurement']}")
 ```
 
 ### Result Structure
 
-The return of the `run()` function is of type `List[List[Dict]]`:
+The return of `run()` is `List[List[Dict]]`:
 
-- **First list** - Ordered per simulation node (Alice, Bob, etc.)
-- **Second list** - Ordered by simulation iteration
-- **Dictionary** - The dictionary returned by each program instance
+- **Outer list**: One entry per node (Alice, Bob, etc.) in order
+- **Inner list**: One entry per iteration
+- **Dictionary**: The returned dictionary from each program
 
-### Important Note on Futures
+### Important: Convert Futures
 
-Before returning any `Future` type objects, it is advisable to convert them to native Python integers or other native types. `Future` objects may cause unexpected behavior in various operations:
+Always convert `Future` objects to native Python types before returning:
 
 ```python
-# Good: Convert to int before returning
+# Good: Convert futures to int
 return {"measurements": [int(m) for m in measurements]}
 
-# Avoid: Returning Future objects directly
-return {"measurements": measurements}  # measurements contains Futures
+# Avoid: May cause issues
+return {"measurements": measurements}  # Contains Future objects
+```
+
+## Global Simulation Data
+
+For sharing data between programs or accessing simulation state, use `GlobalSimData`:
+
+```python
+from squidasm.sim.stack.globals import GlobalSimData
+
+class MyProgram(Program):
+    def run(self, context: ProgramContext):
+        # Access global simulation data
+        sim_data = GlobalSimData.get_instance()
+        
+        # Access the simulation network
+        network = sim_data.get_network()
+        
+        # Access node-specific data
+        node_data = sim_data.get_node_data("Alice")
+```
+
+## Protocol Hooks
+
+SquidASM provides hooks for customizing protocol behavior during simulation.
+
+### Pre/Post Hooks
+
+You can define functions that run before or after specific events:
+
+```python
+from squidasm.run.stack.run import run
+
+def pre_simulation_hook():
+    """Called before each simulation iteration."""
+    print("Starting new iteration")
+
+def post_simulation_hook():
+    """Called after each simulation iteration."""
+    print("Iteration complete")
+
+results = run(
+    config=cfg,
+    programs=programs,
+    num_times=10,
+    # Hooks can be passed to customize behavior
+)
 ```
 
 ## Logging
 
-As more advanced applications are created and tested on networks that simulate noise and loss, it becomes inevitable that in some edge cases the application will return unexpected results or crash. Using logs helps in finding the cause.
+### Setting Up Logging
 
-### Logging Setup Example
+```python
+from squidasm.sim.stack.common import LogManager
 
-To show the usage of logging, we use the example `examples/tutorial/3.2_logging`. This is a QKD-like application that sends a message of unknown size with encryption via EPR pairs.
+# Set the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LogManager.set_log_level("INFO")
 
-The `AliceProgram` uses logging by moving away from print statements to logger statements:
+# Optional: Log to file
+LogManager.log_to_file("simulation.log")
+```
+
+### Using Logger in Programs
 
 ```python
 from squidasm.sim.stack.common import LogManager
 
 class AliceProgram(Program):
-    def __init__(self, message: list):
-        self.message = message
-    
-    def run(self, context: ProgramContext) -> Generator:
+    def run(self, context: ProgramContext):
         logger = LogManager.get_stack_logger("AliceProgram")
-        csocket = context.csockets["Bob"]
-        epr_socket = context.epr_sockets[("Bob", 0)]
-        connection = context.connection
         
-        for bit in self.message:
-            # Generate encryption bits via EPR
-            q1, q2 = yield from epr_socket.create_keep(2)
-            m1 = q1.measure()
-            m2 = q2.measure()
-            yield from connection.flush()
-            
-            # XOR with encryption bits
-            encrypted_bit = bit ^ int(m1) ^ int(m2)
-            continue_bit = 1  # Normal case
-            
-            logger.info(f"Measured qubits: {m1} {m2}")
-            logger.info(f"Send bits: {encrypted_bit} {continue_bit}")
-            
-            # Send to Bob
-            csocket.send(encrypted_bit)
-            csocket.send(continue_bit)
+        logger.debug("Starting program")
+        logger.info(f"Processing {self.num_rounds} rounds")
+        logger.warning("EPR quality below threshold")
+        logger.error("Failed to create EPR pair")
+        logger.critical("Fatal error occurred")
 ```
 
 ### Log Levels
 
-There are 5 levels of logging in order of highest to lowest severity:
+From highest to lowest severity:
 
-1. **CRITICAL** - Critical errors that prevent operation
-2. **ERROR** - Errors that occurred but operation can continue
-3. **WARNING** - Warning messages about potential issues
-4. **INFO** - General informational messages (default level)
-5. **DEBUG** - Detailed debugging information
-
-### Logger Methods
-
-The logger object is obtained via:
-
-```python
-logger = LogManager.get_stack_logger("AliceProgram")
-```
-
-By initializing the logger with a string like `"AliceProgram"`, the logger is initialized as a sub-logger of that type. This sub-logger name will show up in the log messages.
-
-Logger methods corresponding to each level:
-
-```python
-logger.critical("Critical message")
-logger.error("Error message")
-logger.warning("Warning message")
-logger.info("Info message")
-logger.debug("Debug message")
-```
-
-### Setting Log Level
-
-In `run_simulation.py`, configure logging:
-
-```python
-from squidasm.sim.stack.common import LogManager
-
-# Set the log level
-LogManager.set_log_level("INFO")
-
-# Optional: Log to file instead of terminal
-LogManager.log_to_file("simulation.log")
-```
-
-The log level determines what messages will be logged. Setting it to `DEBUG` will enable all log messages. Other levels will disregard messages of a lower level (e.g., `INFO` level ignores `DEBUG` messages).
+1. **CRITICAL** - Fatal errors
+2. **ERROR** - Non-fatal errors
+3. **WARNING** - Potential issues
+4. **INFO** - General information (default)
+5. **DEBUG** - Detailed debugging
 
 ### Log Format
-
-Messages are structured into four segments separated by `:` characters:
 
 ```
 LEVEL:TIME:LOGGER_NAME:MESSAGE
 ```
 
-Example output:
-
+Example:
 ```
-INFO:44000.0 ns:Stack.AliceProgram:Measured qubits: 0 1
+INFO:44000.0 ns:Stack.AliceProgram:Starting EPR generation
 WARNING:44000.0 ns:Stack.Netstack(Bob_netstack):waiting for result for pair 1
-DEBUG:44000.0 ns:Stack.GenericProcessor(Alice_processor):Finished waiting for array slice
+DEBUG:44000.0 ns:Stack.GenericProcessor(Alice_processor):Finished waiting
 ```
 
-### Log Message Parts
+- **TIME** - Simulation time in nanoseconds
+- **LOGGER_NAME** - Identifies the source component
 
-- **LEVEL** - The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- **TIME** - The time in simulation (in nanoseconds, not real-world time)
-- **LOGGER_NAME** - The sub-logger name (provides context)
-- **MESSAGE** - The actual log message
+## Advanced Run Options
 
-### Example: Debugging with Logs
+The `run()` function accepts additional parameters:
 
-Here's output from the QKD example with an imperfect link (fidelity 0.9):
+```python
+from squidasm.run.stack.run import run
 
-```
-INFO:44000.0 ns:Stack.AliceProgram:Measured qubits: 0 1
-INFO:44000.0 ns:Stack.AliceProgram:Send bits: 1 0
-...
-INFO:66000.0 ns:Stack.BobProgram:Measured qubits: 1 0
-INFO:66000.0 ns:Stack.BobProgram:Received bits: 0 1
+results = run(
+    config=cfg,                    # Network configuration
+    programs=programs,             # Node-program mapping
+    num_times=10,                  # Number of iterations
+)
 ```
 
-In this case, an EPR pair measurement resulted in different values for Alice and Bob, introducing an error. The logs help identify exactly where this happened.
+### Multithread vs Singlethread Execution
+
+SquidASM supports different execution modes:
+
+```python
+# Singlethread execution (default)
+from squidasm.run.singlethread.run import run as run_singlethread
+
+# Multithread execution (for larger simulations)
+from squidasm.run.multithread.run import run as run_multithread
+```
+
+The singlethread mode is simpler and sufficient for most use cases. Multithread mode can provide performance benefits for complex simulations.
+
+## Example: Complete Simulation Script
+
+```python
+"""Complete simulation example with logging and results processing."""
+
+from application import AliceProgram, BobProgram
+from squidasm.run.stack.config import StackNetworkConfig
+from squidasm.run.stack.run import run
+from squidasm.sim.stack.common import LogManager
+import numpy as np
+
+# Configure logging
+LogManager.set_log_level("INFO")
+
+# Load network configuration
+cfg = StackNetworkConfig.from_file("config.yaml")
+
+# Create programs with parameters
+alice_program = AliceProgram(num_rounds=10)
+bob_program = BobProgram(num_rounds=10)
+
+# Run simulation
+num_iterations = 100
+results = run(
+    config=cfg,
+    programs={"Alice": alice_program, "Bob": bob_program},
+    num_times=num_iterations
+)
+
+alice_results, bob_results = results
+
+# Analyze results
+alice_measurements = [r["measurements"] for r in alice_results]
+bob_measurements = [r["measurements"] for r in bob_results]
+
+# Calculate statistics
+all_alice = [m for run in alice_measurements for m in run]
+all_bob = [m for run in bob_measurements for m in run]
+
+correlation = sum(a == b for a, b in zip(all_alice, all_bob)) / len(all_alice)
+print(f"Correlation: {correlation:.2%}")
+print(f"Total measurements: {len(all_alice)}")
+```
 
 ## Summary
 
 In this section you learned:
 
-- How to structure `run_simulation.py` with program imports and configuration loading
-- The **Program interface** with `meta()` and `run()` methods
-- How to access sockets and connections via `ProgramContext`
-- How to **return results** from programs and access them in `run_simulation.py`
-- How to use **logging** to debug applications
-- **Log levels** and how to configure logging
-- How to interpret **log messages** with their format and timing information
+- How to structure **run_simulation.py** with program imports and configuration
+- The **Program interface** with `@property def meta()` and `def run(context)`
+- How to access **sockets by peer name** (not tuples)
+- Using **app_config** for application configuration
+- How to **return results** and process them after simulation
+- Using **GlobalSimData** for simulation-wide data
+- Configuring **logging** with LogManager
+- **Log levels** and message format interpretation
 
-The next section will explain network configuration, including how to specify stack types, link types, and how to perform parameter sweeping.
+## Next Steps
+
+- [Tutorial 4: Network Configuration](4_network_configuration.md) - Detailed network setup
+- [Tutorial 5: Multi-Node Networks](5_multi_node.md) - Networks with more than two nodes
+- [Tutorial 6: Parameter Sweeping](6_parameter_sweeping.md) - Running parameter studies

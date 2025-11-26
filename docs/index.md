@@ -40,17 +40,21 @@ SquidASM is a **quantum network simulator** built on top of [NetSquid](https://n
 
 ### [Architecture](./architecture/overview.md)
 System design and components.
-- Layered architecture (Application, Host, QNOS, Device)
-- Core components (Program, Connection, Sockets)
-- Execution flow and data paths
-- Module organization
+- [Overview](./architecture/overview.md) - Layered architecture (Application, Host, QNOS, Device)
+- [Simulation Flow](./architecture/simulation_flow.md) - Configuration → Build → Execute → Results
+- [Stack Components](./architecture/stack_components.md) - Host, QNodeOS, Netstack, QDevice
+- [NetQASM Integration](./architecture/netqasm_integration.md) - SDK → Compilation → Execution
 
 ### [API Reference](./api/index.md)
 Function and class documentation.
-- Program interface and lifecycle
-- Configuration system
-- Simulation execution
-- Utility functions and pre-built routines
+- [Program Interface](./api/program_interface.md) - Writing programs
+- [Configuration](./api/configuration.md) - Network setup
+- [Running Simulations](./api/running_simulations.md) - Execution API
+- **Package Documentation:**
+  - [squidasm.sim](./api/sim_package.md) - Core simulation (Program, ProgramContext)
+  - [squidasm.run](./api/run_package.md) - Configuration and execution
+  - [squidasm.nqasm](./api/nqasm_package.md) - NetQASM backend
+  - [squidasm.util](./api/util_package.md) - Utilities and helpers
 
 ### [Foundations](./foundations/index.md)
 Conceptual guides for key systems.
@@ -67,6 +71,14 @@ Step-by-step practical examples.
 - Network configuration
 - Multi-node applications
 - Parameter sweeping
+
+### [Advanced Topics](./advanced/index.md)
+In-depth guides for experienced users.
+- [Custom Protocols](./advanced/custom_protocols.md) - Building QKD, distillation protocols
+- [Noise Models](./advanced/noise_models.md) - Gate noise, decoherence, link fidelity
+- [Debugging](./advanced/debugging.md) - Logging, common issues, troubleshooting
+- [Performance](./advanced/performance.md) - Optimization and benchmarking
+- [NetSquid Integration](./advanced/netsquid_integration.md) - Low-level access
 
 ## Key Concepts at a Glance
 
@@ -127,14 +139,21 @@ docs/markdown/
 ├── index.md                          # This file
 │
 ├── architecture/
-│   └── overview.md                   # System design and components
+│   ├── overview.md                   # System design and components
+│   ├── simulation_flow.md            # Execution pipeline
+│   ├── stack_components.md           # Stack layer details
+│   └── netqasm_integration.md        # NetQASM compilation flow
 │
 ├── api/
 │   ├── index.md                      # API documentation index
 │   ├── program_interface.md          # Writing programs
 │   ├── context_and_stack.md          # Runtime context internals
 │   ├── configuration.md              # Network configuration
-│   └── running_simulations.md        # Execution and utilities
+│   ├── running_simulations.md        # Execution and utilities
+│   ├── sim_package.md                # squidasm.sim package docs
+│   ├── run_package.md                # squidasm.run package docs
+│   ├── nqasm_package.md              # squidasm.nqasm package docs
+│   └── util_package.md               # squidasm.util package docs
 │
 ├── foundations/
 │   ├── index.md                      # Conceptual guides index
@@ -142,15 +161,23 @@ docs/markdown/
 │   ├── epr_sockets.md                # Entanglement generation
 │   └── classical_communication.md    # Message passing
 │
-└── tutorials/
-    ├── index.md                      # Tutorial index
-    ├── 1_basics.md                   # Basic operations
-    ├── 2_netqasm.md                  # NetQASM programming
-    ├── 3_simulation_control.md       # Simulation control & output
-    ├── 4_network_configuration.md    # Network setup
-    ├── 5_multi_node.md               # Multi-node applications
-    ├── 6_parameter_sweeping.md       # Parameter studies
-    └── appendix_terminology.md       # Glossary
+├── tutorials/
+│   ├── index.md                      # Tutorial index
+│   ├── 1_basics.md                   # Basic operations
+│   ├── 2_netqasm.md                  # NetQASM programming
+│   ├── 3_simulation_control.md       # Simulation control & output
+│   ├── 4_network_configuration.md    # Network setup
+│   ├── 5_multi_node.md               # Multi-node applications
+│   ├── 6_parameter_sweeping.md       # Parameter studies
+│   └── appendix_terminology.md       # Glossary
+│
+└── advanced/
+    ├── index.md                      # Advanced topics index
+    ├── custom_protocols.md           # Building custom protocols
+    ├── noise_models.md               # Noise configuration guide
+    ├── debugging.md                  # Debugging techniques
+    ├── performance.md                # Performance optimization
+    └── netsquid_integration.md       # NetSquid low-level access
 ```
 
 ## Common Workflows

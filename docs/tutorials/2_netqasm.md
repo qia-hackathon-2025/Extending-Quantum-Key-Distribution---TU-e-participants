@@ -34,7 +34,7 @@ Users are not expected to directly create NetQASM routines. The NetQASM SDK allo
 When you execute commands like:
 
 ```python
-q = (yield from epr_socket.create_keep(1))[0]
+q = epr_socket.create_keep()[0]
 q.H()
 result = q.measure()
 ```
@@ -55,6 +55,31 @@ The NetQASM connection is the central interaction point for a program. The conne
 ### Connection Object
 
 The object is called `connection` in this tutorial, but is a `BaseNetQASMConnection` type object. The name "connection" refers to the fact that the host and QNPU are not the same device, so the NetQASMConnection object represents the link and the ability of the host to send instructions to the QNPU.
+
+### SquidASM Execution: NetSquidExecutor
+
+When running in SquidASM, the compiled subroutines are executed by the `NetSquidExecutor` class (found in `squidasm.nqasm.executor.netsquidexecutor`). This executor:
+
+- Converts NetQASM instructions into NetSquid operations
+- Manages the quantum memory simulation
+- Handles EPR generation between nodes
+- Coordinates timing with the discrete-event simulation
+
+The executor is the bridge between the high-level NetQASM instructions and the low-level NetSquid simulator.
+
+### SubroutineHandler
+
+The `SubroutineHandler` class (in `squidasm.nqasm.executor.subroutine`) manages the execution state:
+
+```python
+from squidasm.nqasm.executor.subroutine import SubroutineHandler
+
+# The handler manages:
+# - Program counter for instruction execution
+# - Register state (classical registers)
+# - Array storage for results
+# - Branching and control flow
+```
 
 ### Inspecting Compiled Subroutines
 
@@ -112,7 +137,7 @@ When a command on a qubit or EPR socket is invoked, it forwards these instructio
 
 An important consequence of the instruction queue model is that all instructions and their results have not happened before the subroutine is sent to the QNPU.
 
-Therefore, the output variable `result` of a measure operation does not yet contain the result of the measurement after `result = qubit.measure()` has been executed in the Python code. `result` only has a value after `yield from connection.flush()` is executed.
+Therefore, the output variable `result` of a measure operation does not yet contain the result of the measurement after `result = qubit.measure()` has been executed in the Python code. `result` only has a value after `connection.flush()` is executed.
 
 ### Dealing with Futures
 
@@ -122,26 +147,29 @@ Due to this, many operations using a `Future` object will cause an error if done
 
 ```python
 # This will cause an error!
-@classmethod
-def meta(cls) -> ProgramMeta:
-    return ProgramMeta(name="Alice")
+from squidasm.sim.stack.program import Program, ProgramContext, ProgramMeta
 
-def run(self, context: ProgramContext) -> Generator:
-    connection = context.connection
-    
-    q = Qubit(connection)
-    q.X()
-    result = q.measure()
-    
-    # These will all fail with AttributeError
-    if result == 1:  # ERROR: Can't use Future in if statement
-        pass
-    
-    x = result + 1   # ERROR: Can't do arithmetic with Future
-    
-    print(result)    # ERROR: Can't print Future properly
-    
-    # yield from connection.flush()  # This line would fix it!
+class BadExample(Program):
+    @property
+    def meta(self) -> ProgramMeta:
+        return ProgramMeta(name="bad_example", max_qubits=1)
+
+    def run(self, context: ProgramContext):
+        connection = context.connection
+        
+        q = Qubit(connection)
+        q.X()
+        result = q.measure()
+        
+        # These will all fail with AttributeError
+        if result == 1:  # ERROR: Can't use Future in if statement
+            pass
+        
+        x = result + 1   # ERROR: Can't do arithmetic with Future
+        
+        print(result)    # ERROR: Can't print Future properly
+        
+        # connection.flush()  # This line would fix it!
 ```
 
 Attempting to execute this code results in:
@@ -185,11 +213,142 @@ def conditional_operation(connection, q):
         q.H()
     
     # Execute body only if result == 1
-    yield from connection.if_eq(result, 1, body)
-    yield from connection.flush()
+    connection.if_eq(result, 1, body)
+    connection.flush()
 ```
 
 For more details on control flow operations, consult the [NetQASM SDK tutorial](https://netqasm.readthedocs.io/en/latest/quickstart/using-sdk.html#simple-classical-logic).
+
+## The Builder Pattern
+
+The NetQASM SDK uses a builder pattern for constructing subroutines. While users typically don't interact with this directly, understanding it helps with debugging:
+
+```python
+from netqasm.lang.subroutine import Subroutine
+from netqasm.lang.ir import GenericInstr, ICmd
+
+# The SDK internally builds instruction sequences like this:
+# Each operation (H, X, measure) becomes one or more NetQASM instructions
+# These are collected by the connection's internal builder
+# flush() triggers compilation and execution
+```
+
+## Quantum Network Operating System (QNodeOS)
+
+The `QNodeOS` class (in `squidasm.nqasm.qnodeos`) is the simulated quantum network operating system that manages:
+
+- **Application registration**: Tracks running applications
+- **Memory allocation**: Assigns virtual qubit IDs to physical qubits
+- **Subroutine execution**: Dispatches instructions to the executor
+- **EPR coordination**: Manages entanglement generation with remote nodes
+
+```python
+from squidasm.nqasm.qnodeos import QNodeOS
+
+# QNodeOS provides:
+# - handle_request(): Process incoming NetQASM subroutines
+# - Memory management for quantum registers
+# - Interface to the physical layer (QDevice)
+```
+
+## Common Patterns
+
+### Pattern 1: EPR Creation and Measurement
+
+```python
+def run(self, context: ProgramContext):
+    connection = context.connection
+    epr_socket = context.epr_sockets[self.PEER_NAME]
+    
+    # Create EPR pair
+    q = epr_socket.create_keep()[0]
+    
+    # Apply gates
+    q.H()
+    q.Z()
+    
+    # Measure
+    result = q.measure()
+    
+    # Get result
+    connection.flush()
+    
+    return {"result": int(result)}
+```
+
+### Pattern 2: Multiple Qubits with Gates
+
+```python
+def run(self, context: ProgramContext):
+    connection = context.connection
+    
+    q0 = Qubit(connection)
+    q1 = Qubit(connection)
+    
+    # Create Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2
+    q0.H()
+    q0.cnot(q1)
+    
+    # Measure both
+    r0 = q0.measure()
+    r1 = q1.measure()
+    
+    connection.flush()
+    
+    return {"r0": int(r0), "r1": int(r1)}
+```
+
+### Pattern 3: EPR Receive and Measure
+
+```python
+def run(self, context: ProgramContext):
+    connection = context.connection
+    epr_socket = context.epr_sockets[self.PEER_NAME]
+    
+    # Wait for and receive EPR pair
+    q = epr_socket.recv_keep()[0]
+    
+    # Apply operations
+    q.H()
+    
+    # Measure
+    result = q.measure()
+    
+    # Get result
+    connection.flush()
+    
+    return {"result": int(result)}
+```
+
+### Pattern 4: Teleportation Circuit
+
+```python
+def run(self, context: ProgramContext):
+    connection = context.connection
+    epr_socket = context.epr_sockets[self.PEER_NAME]
+    csocket = context.csockets[self.PEER_NAME]
+    
+    # Create qubit to teleport
+    q_data = Qubit(connection)
+    q_data.H()  # Prepare |+⟩ state
+    
+    # Get entangled qubit
+    q_epr = epr_socket.create_keep()[0]
+    
+    # Bell measurement
+    q_data.cnot(q_epr)
+    q_data.H()
+    
+    m1 = q_data.measure()
+    m2 = q_epr.measure()
+    
+    connection.flush()
+    
+    # Send classical corrections
+    csocket.send(f"{int(m1)},{int(m2)}")
+    
+    return {"m1": int(m1), "m2": int(m2)}
+```
 
 ## Unsupported Features
 
@@ -206,69 +365,6 @@ Examples of potentially unsupported features:
 
 When in doubt, test your code with simple examples first and refer to the SquidASM examples in `examples/tutorial` for patterns that are known to work.
 
-## Common Patterns
-
-### Pattern 1: EPR Creation and Measurement
-
-```python
-def pattern_epr_create_measure(epr_socket, connection):
-    # Create EPR pair
-    q = (yield from epr_socket.create_keep(1))[0]
-    
-    # Apply gates
-    q.H()
-    q.Z()
-    
-    # Measure
-    result = q.measure()
-    
-    # Get result
-    yield from connection.flush()
-    
-    return result
-```
-
-### Pattern 2: Multiple Qubits with Gates
-
-```python
-def pattern_multi_qubit(connection):
-    q0 = Qubit(connection)
-    q1 = Qubit(connection)
-    
-    # Initialize and entangle
-    q0.X()
-    q1.X()
-    q0.H()
-    q0.cnot(q1)
-    
-    # Measure both
-    r0 = q0.measure()
-    r1 = q1.measure()
-    
-    yield from connection.flush()
-    
-    return r0, r1
-```
-
-### Pattern 3: EPR Receive and Measure
-
-```python
-def pattern_epr_receive_measure(epr_socket, connection):
-    # Wait for and receive EPR pair
-    q = (yield from epr_socket.recv_keep(1))[0]
-    
-    # Apply operations
-    q.H()
-    
-    # Measure
-    result = q.measure()
-    
-    # Get result
-    yield from connection.flush()
-    
-    return result
-```
-
 ## Summary
 
 In this section you learned:
@@ -277,8 +373,13 @@ In this section you learned:
 - The **instruction queue model** where operations are queued and executed on `flush()`
 - **Future objects** are placeholders for measurement results that only become concrete values after flushing
 - **Control flow** with Futures requires special SDK methods like `if_eq()`
-- How to **compile and inspect** subroutines before execution
-- **Patterns** for common operations like EPR creation and multi-qubit gates
+- The **NetSquidExecutor** bridges NetQASM and NetSquid simulation
+- **SubroutineHandler** manages execution state and register tracking
+- **QNodeOS** simulates the quantum network operating system
+- **Patterns** for common operations like EPR creation and teleportation
 - **Restrictions** on what operations are supported in SquidASM
 
-The next section will explain how to run simulations, get output from programs, and use logging for debugging.
+## Next Steps
+
+- [Tutorial 3: Simulation Control](3_simulation_control.md) - Advanced simulation features and configuration
+- [Tutorial 4: Network Configuration](4_network_configuration.md) - Detailed network setup
