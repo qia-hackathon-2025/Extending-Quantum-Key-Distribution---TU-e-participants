@@ -99,7 +99,9 @@ class SimpleCascadeReconciliator:
         elif estimated_qber is not None and estimated_qber > 0:
             self._initial_block_size = compute_optimal_block_size(estimated_qber)
         else:
-            self._initial_block_size = max(4, len(self._key) // 50)
+            # For QBER=0 or unknown, use larger blocks to minimize leakage
+            # With no errors expected, large blocks are more efficient
+            self._initial_block_size = max(4, len(self._key) // 4)
 
     def reconcile(self) -> Generator[EventExpression, None, int]:
         """Run all Cascade passes and return total parity leakage.

@@ -2,7 +2,7 @@
 
 This module implements an extended Quantum Key Distribution (QKD) protocol based on the BB84 scheme, incorporating post-processing stages required for practical key generation with information-theoretic security guarantees.
 
-For theoretical background, see [Theoretical Aspects](../docs/challenges/qkd/extending_qkd_theorethical_aspects.md). For implementation details, see [Technical Aspects](../docs/challenges/qkd/extending_qkd_technical_aspects.md).
+For theoretical background, see [Theoretical Aspects](../docs/challenges/qkd/extending_qkd_theorethical_aspects.md).
 
 ## Architecture Overview
 

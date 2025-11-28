@@ -556,6 +556,11 @@ class AliceProgram(QkdProgram):
         )
 
         # Compute final key length using Devetak-Winter formula
+        self._logger.debug(
+            f"Key length calc inputs: reconciled={len(reconciled_key)}, "
+            f"qber={total_qber:.4f}, leakage_ec={leakage_ec}, leakage_ver={leakage_ver}, "
+            f"epsilon={self._security_parameter}"
+        )
         final_length = compute_final_key_length(
             reconciled_length=len(reconciled_key),
             qber=total_qber,
@@ -565,7 +570,11 @@ class AliceProgram(QkdProgram):
         )
 
         if final_length <= 0:
-            self._logger.error(f"Computed final key length is {final_length}")
+            self._logger.error(
+                f"Computed final key length is {final_length}. "
+                f"Inputs: reconciled={len(reconciled_key)}, qber={total_qber:.4f}, "
+                f"leak_ec={leakage_ec}, leak_ver={leakage_ver}, eps={self._security_parameter}"
+            )
             return self._error_result(
                 "insufficient_secrecy",
                 f"Cannot extract secure key (computed length: {final_length})"
@@ -767,6 +776,11 @@ class BobProgram(QkdProgram):
         )
 
         # Compute final key length (same as Alice)
+        self._logger.debug(
+            f"Key length calc inputs: reconciled={len(reconciled_key)}, "
+            f"qber={total_qber:.4f}, leakage_ec={leakage_ec}, leakage_ver={leakage_ver}, "
+            f"epsilon={self._security_parameter}"
+        )
         final_length = compute_final_key_length(
             reconciled_length=len(reconciled_key),
             qber=total_qber,
@@ -776,7 +790,11 @@ class BobProgram(QkdProgram):
         )
 
         if final_length <= 0:
-            self._logger.error(f"Computed final key length is {final_length}")
+            self._logger.error(
+                f"Computed final key length is {final_length}. "
+                f"Inputs: reconciled={len(reconciled_key)}, qber={total_qber:.4f}, "
+                f"leak_ec={leakage_ec}, leak_ver={leakage_ver}, eps={self._security_parameter}"
+            )
             return self._error_result(
                 "insufficient_secrecy",
                 f"Cannot extract secure key (computed length: {final_length})"

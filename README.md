@@ -47,7 +47,7 @@ See [hackathon_challenge/README.md](hackathon_challenge/README.md) for detailed 
 
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - NetSquid account (register at [forum.netsquid.org](https://forum.netsquid.org))
 - Linux or macOS (Windows users require WSL)
 
@@ -189,7 +189,6 @@ pytest --cov=hackathon_challenge --cov-report=html
 ## Documentation
 
 - [Theoretical Aspects](docs/challenges/qkd/extending_qkd_theorethical_aspects.md) - Mathematical framework for Cascade and privacy amplification
-- [Technical Aspects](docs/challenges/qkd/extending_qkd_technical_aspects.md) - SquidASM implementation architecture
 - [SquidASM Tutorial](https://squidasm.readthedocs.io/en/latest/) - Official SquidASM documentation
 
 ## License
