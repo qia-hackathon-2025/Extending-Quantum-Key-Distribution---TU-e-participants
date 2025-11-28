@@ -7,13 +7,16 @@ This guide helps you get started with the QKD extension implementation.
 ## Directory Structure Created
 
 ```
-hackathon_challenge/
-├── pyproject.toml           # Project configuration
-├── config.yaml              # Simulation parameters
-├── network_config.yaml      # 2-node network topology
-├── README.md                # Package documentation
-├── .gitignore              # Git ignore patterns
-│
+qia-hackathon-2025/
+├── pyproject.toml           # Project configuration (TOP LEVEL)
+└── hackathon_challenge/     # Main package
+    ├── config.yaml          # Simulation parameters
+    ├── network_config.yaml  # 2-node network topology
+    ├── README.md            # Package documentation
+    ├── SETUP.md             # This file
+    ├── STATUS.md            # Implementation status
+    ├── .gitignore           # Git ignore patterns
+    │
 ├── core/                    # Core protocol components
 │   ├── __init__.py
 │   ├── constants.py         # Protocol constants (QBER_THRESHOLD, etc.)
@@ -72,9 +75,9 @@ hackathon_challenge/
 
 ## Installation
 
-1. **Navigate to the hackathon_challenge directory:**
+1. **Navigate to the qia-hackathon-2025 directory (where pyproject.toml is):**
    ```bash
-   cd qia-hackathon-2025/hackathon_challenge
+   cd qia-hackathon-2025
    ```
 
 2. **Install the package in development mode:**
@@ -156,6 +159,7 @@ open htmlcov/index.html  # or xdg-open on Linux
 Once implementation is complete:
 
 ```bash
+cd hackathon_challenge
 python scripts/run_simulation.py
 ```
 

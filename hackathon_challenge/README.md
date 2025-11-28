@@ -23,7 +23,8 @@ hackathon_challenge/
 ## Installation
 
 ```bash
-cd qia-hackathon-2025/hackathon_challenge
+# From qia-hackathon-2025 root directory
+cd qia-hackathon-2025
 pip install -e .
 pip install -e ".[dev]"  # For development tools
 ```
@@ -33,13 +34,15 @@ pip install -e ".[dev]"  # For development tools
 Run a simulation:
 
 ```bash
+cd hackathon_challenge
 python scripts/run_simulation.py
 ```
 
 Run tests:
 
 ```bash
-pytest tests/ -v
+# From qia-hackathon-2025 root
+pytest hackathon_challenge/tests/ -v
 pytest --cov=hackathon_challenge --cov-report=html
 ```
 
