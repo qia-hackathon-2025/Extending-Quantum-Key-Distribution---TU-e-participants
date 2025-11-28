@@ -25,3 +25,23 @@ MSG_CASCADE_DONE: str = "CASCADE_DONE"
 MSG_VERIFY_HASH: str = "VERIFY_HASH"
 MSG_PA_SEED: str = "PA_SEED"
 MSG_ALL_MEASURED: str = "ALL_MEASURED"
+
+# Synchronization messages
+# Reference: example_qkd.py (ALL_MEASURED)
+MSG_BASES: str = "BASES"
+MSG_TEST_INDICES: str = "TEST_INDICES"
+MSG_TEST_OUTCOMES: str = "TEST_OUTCOMES"
+
+# Protocol result keys
+RESULT_SECRET_KEY: str = "secret_key"
+RESULT_QBER: str = "qber"
+RESULT_KEY_LENGTH: str = "key_length"
+RESULT_LEAKAGE: str = "leakage"
+RESULT_ERROR: str = "error"
+RESULT_SUCCESS: str = "success"
+
+# Default EPR parameters
+DEFAULT_NUM_EPR_PAIRS: int = 1000
+DEFAULT_NUM_TEST_BITS: int = 100
+DEFAULT_CASCADE_SEED: int = 42
+DEFAULT_MAX_QUBITS: int = 20
