@@ -1,0 +1,48 @@
+# Scenario: Quick Test
+# Fast scenario for development and CI/CD
+# Minimal EPR pairs, single run
+# Used for quick sanity checks
+
+_base: "../base.yaml"
+
+scenario:
+  name: "quick_test"
+  description: "Quick sanity check for development"
+  category: "development"
+
+# Minimal network noise
+network:
+  link_noise: 0.03
+  qdevice_noise: 0.0
+
+# Sufficient EPR pairs for viable key after all processing
+# Breakdown:
+#   - 500 EPR pairs → ~250 same basis (50%)
+#   - ~50 test bits → ~200 raw key bits
+#   - After PA with ε=1e-6: security_margin = 2*log2(1e6) ≈ 40 bits
+#   - EC leakage ~50 bits, ver leakage ~64 bits
+#   - Available: 200 - 50 - 64 - 40 = ~46 bits final key
+epr:
+  num_pairs: 500
+  num_test_bits: 50
+
+# Relaxed security parameter for quick testing
+# In production use 1e-12; for dev/CI use 1e-6
+privacy:
+  security_parameter: 1.0e-6
+  compression_factor: 0.9
+
+# Fast simulation
+simulation:
+  num_runs: 1
+  log_level: "INFO"
+
+# Expected outcomes
+expected:
+  qber_range: [0.01, 0.06]
+  success_rate_min: 0.8
+  min_key_length: 20
+
+# Override threshold for quick test
+thresholds:
+  min_key_length: 20

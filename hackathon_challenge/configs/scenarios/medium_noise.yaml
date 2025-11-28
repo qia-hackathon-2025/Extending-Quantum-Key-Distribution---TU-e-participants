@@ -1,0 +1,32 @@
+# Scenario: Medium Noise QKD
+# Tests protocol behavior under typical operational conditions
+# Expected: Good success rate, moderate key length
+# QBER target: ~5%
+
+_base: "../base.yaml"
+
+scenario:
+  name: "medium_noise"
+  description: "Medium noise scenario - typical operational conditions"
+  category: "performance"
+
+# Override network parameters for medium noise
+network:
+  link_noise: 0.05         # ~5% QBER
+  qdevice_noise: 0.0
+
+# EPR parameters
+epr:
+  num_pairs: 800
+  num_test_bits: 80
+
+# Simulation settings
+simulation:
+  num_runs: 10
+  log_level: "INFO"
+
+# Expected outcomes
+expected:
+  qber_range: [0.03, 0.08]
+  success_rate_min: 0.7
+  min_key_length: 100

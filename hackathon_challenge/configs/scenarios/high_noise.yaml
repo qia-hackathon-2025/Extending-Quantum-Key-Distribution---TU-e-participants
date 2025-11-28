@@ -1,0 +1,36 @@
+# Scenario: High Noise QKD
+# Tests protocol behavior under challenging conditions
+# Expected: Lower success rate, shorter keys, may abort
+# QBER target: ~8-10%
+
+_base: "../base.yaml"
+
+scenario:
+  name: "high_noise"
+  description: "High noise scenario - challenging conditions"
+  category: "stress"
+
+# Override network parameters for high noise
+network:
+  link_noise: 0.10         # ~10% QBER (near threshold)
+  qdevice_noise: 0.01      # Add some device noise
+
+# EPR parameters  
+epr:
+  num_pairs: 1200          # More pairs to compensate
+  num_test_bits: 150
+
+# Cascade may need more passes
+cascade:
+  num_passes: 5
+
+# Simulation settings
+simulation:
+  num_runs: 10
+  log_level: "INFO"
+
+# Expected outcomes
+expected:
+  qber_range: [0.08, 0.12]
+  success_rate_min: 0.3    # Many runs may abort
+  min_key_length: 50

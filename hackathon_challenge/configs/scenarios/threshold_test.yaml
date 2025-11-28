@@ -1,0 +1,32 @@
+# Scenario: Threshold Test
+# Tests protocol behavior at the Shor-Preskill security bound (11%)
+# Expected: Protocol should abort most/all runs
+# QBER target: ~11-12%
+
+_base: "../base.yaml"
+
+scenario:
+  name: "threshold_test"
+  description: "Test at Shor-Preskill security threshold"
+  category: "security"
+
+# Override network parameters to exceed threshold
+network:
+  link_noise: 0.12         # ~12% QBER (above threshold)
+  qdevice_noise: 0.01
+
+# EPR parameters
+epr:
+  num_pairs: 500
+  num_test_bits: 100
+
+# Simulation settings
+simulation:
+  num_runs: 5
+  log_level: "WARNING"
+
+# Expected outcomes
+expected:
+  qber_range: [0.10, 0.15]
+  success_rate_max: 0.1    # Should mostly abort
+  abort_expected: true

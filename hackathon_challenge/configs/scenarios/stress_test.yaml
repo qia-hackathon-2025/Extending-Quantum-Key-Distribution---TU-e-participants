@@ -1,0 +1,32 @@
+# Scenario: Stress Test
+# Tests protocol with many EPR pairs to evaluate scalability
+# Expected: Tests memory and performance limits
+# QBER target: ~5% (moderate)
+
+_base: "../base.yaml"
+
+scenario:
+  name: "stress_test"
+  description: "Scalability test with large number of EPR pairs"
+  category: "stress"
+
+# Override network parameters
+network:
+  link_noise: 0.05         # ~5% QBER
+  qdevice_noise: 0.0
+
+# Large number of EPR pairs
+epr:
+  num_pairs: 5000          # Stress test with many pairs
+  num_test_bits: 500
+
+# Simulation settings
+simulation:
+  num_runs: 3              # Fewer runs due to resource usage
+  log_level: "WARNING"
+
+# Expected outcomes
+expected:
+  qber_range: [0.03, 0.08]
+  success_rate_min: 0.6
+  min_key_length: 500

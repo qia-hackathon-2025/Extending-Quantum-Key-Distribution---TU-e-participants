@@ -1,0 +1,51 @@
+# Base QKD Protocol Configuration
+# This file contains default values inherited by all scenarios.
+# Reference: implementation_plan.md §3.1
+
+# =============================================================================
+# Default Protocol Parameters
+# =============================================================================
+
+simulation:
+  num_runs: 5              # Number of independent QKD sessions per scenario
+  log_level: "WARNING"     # Default logging level
+  save_results: true       # Whether to save results to file
+  output_format: "both"    # "json", "csv", or "both"
+  output_dir: "results"    # Directory for result files
+
+# Default EPR generation parameters
+epr:
+  num_pairs: 500           # Number of EPR pairs to generate
+  num_test_bits: null      # Bits for QBER estimation (null = auto: num_pairs // 4)
+
+# Default authentication parameters  
+auth:
+  key: "shared_secret_key_alice_bob"  # Pre-shared authentication key
+  hash_algorithm: "sha256"            # HMAC algorithm
+
+# Default Cascade reconciliation parameters
+cascade:
+  seed: 42                 # Shared RNG seed for permutations
+  num_passes: 4            # Number of Cascade passes
+  initial_block_size: null # Auto-compute from QBER if null
+
+# Default verification parameters
+verification:
+  tag_bits: 64             # Polynomial hash tag size (64 or 128)
+  
+# Default privacy amplification parameters
+privacy:
+  security_parameter: 1.0e-12   # ε_sec for PA security guarantee
+  compression_factor: 0.8       # Safety margin for key length
+
+# Protocol thresholds
+thresholds:
+  qber_abort: 0.11         # Shor-Preskill bound (11%)
+  min_key_length: 50       # Minimum acceptable final key length
+
+# Default network parameters
+network:
+  link_noise: 0.05         # Target QBER (~5%)
+  qdevice_noise: 0.0       # Quantum device noise
+  clink_delay: 0.0         # Classical link delay (ns)
+  link_delay: 0.0          # EPR generation delay (ns)

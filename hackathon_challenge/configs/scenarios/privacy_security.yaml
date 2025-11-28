@@ -1,0 +1,40 @@
+# Scenario: Privacy Amplification Security Test
+# Tests key length calculation and privacy amplification
+# Varies security parameters
+
+_base: "../base.yaml"
+
+scenario:
+  name: "privacy_security"
+  description: "Test privacy amplification security guarantees"
+  category: "security"
+
+# Low-medium noise
+network:
+  link_noise: 0.04
+  qdevice_noise: 0.0
+
+# Standard EPR
+epr:
+  num_pairs: 800
+  num_test_bits: 80
+
+# Test different security parameters
+privacy:
+  security_parameter: 1.0e-12  # Default
+  # Sweep values for batch analysis
+  sweep:
+    security_params: [1.0e-6, 1.0e-9, 1.0e-12, 1.0e-15]
+
+verification:
+  tag_bits: 64
+  sweep:
+    tag_bits_values: [64, 128]
+
+simulation:
+  num_runs: 5
+  log_level: "INFO"
+
+expected:
+  qber_range: [0.02, 0.07]
+  success_rate_min: 0.7

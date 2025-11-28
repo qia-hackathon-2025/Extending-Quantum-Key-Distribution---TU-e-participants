@@ -1,0 +1,30 @@
+# Two-Node Ideal Network Configuration
+# Perfect channel with no noise - for baseline testing
+# Reference: squidasm/util/util.py create_two_node_network
+
+network:
+  name: "two_node_ideal"
+  description: "Ideal two-node network with perfect EPR generation"
+  
+nodes:
+  - name: "Alice"
+    qdevice_type: "generic"
+    max_qubits: 20
+    
+  - name: "Bob"
+    qdevice_type: "generic"
+    max_qubits: 20
+
+links:
+  - node_1: "Alice"
+    node_2: "Bob"
+    type: "depolarise"
+    fidelity: 1.0          # Perfect EPR pairs
+    t_cycle: 0             # No delay
+    prob_success: 1.0      # Always succeeds
+
+clinks:
+  - node_1: "Alice"
+    node_2: "Bob"
+    type: "default"
+    delay: 0               # No classical delay

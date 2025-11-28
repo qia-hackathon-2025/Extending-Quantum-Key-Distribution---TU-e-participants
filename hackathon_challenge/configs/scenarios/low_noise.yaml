@@ -1,0 +1,32 @@
+# Scenario: Low Noise QKD
+# Tests protocol behavior under ideal/near-ideal conditions
+# Expected: High success rate, long final keys
+# QBER target: ~1-2%
+
+_base: "../base.yaml"  # Inherit from base config
+
+scenario:
+  name: "low_noise"
+  description: "Low noise scenario for baseline performance"
+  category: "performance"
+
+# Override network parameters for low noise
+network:
+  link_noise: 0.02         # ~2% QBER
+  qdevice_noise: 0.0       # No device noise
+
+# EPR parameters
+epr:
+  num_pairs: 1000          # More pairs for better statistics
+  num_test_bits: 100       # 10% for QBER estimation
+
+# Simulation settings
+simulation:
+  num_runs: 10             # Multiple runs for statistics
+  log_level: "INFO"
+
+# Expected outcomes (for validation)
+expected:
+  qber_range: [0.01, 0.04] # Expected QBER range
+  success_rate_min: 0.9    # At least 90% success
+  min_key_length: 200      # Should produce long keys

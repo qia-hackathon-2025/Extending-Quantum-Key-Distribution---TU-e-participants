@@ -1,0 +1,38 @@
+# Scenario: Cascade Efficiency Test
+# Varies Cascade parameters to test reconciliation efficiency
+# Tests different block sizes and pass counts
+
+_base: "../base.yaml"
+
+scenario:
+  name: "cascade_efficiency"
+  description: "Test Cascade reconciliation efficiency"
+  category: "protocol_analysis"
+
+# Moderate noise for meaningful reconciliation
+network:
+  link_noise: 0.06
+  qdevice_noise: 0.0
+
+# Standard EPR generation
+epr:
+  num_pairs: 600
+  num_test_bits: 60
+
+# Cascade parameter sweep (for batch analysis)
+cascade:
+  seed: 42
+  num_passes: 4
+  # Parameter variations defined here for reference
+  # The run script should sweep these values
+  sweep:
+    num_passes_values: [2, 3, 4, 5, 6]
+    initial_block_sizes: [8, 16, 32, null]  # null = auto
+
+simulation:
+  num_runs: 5
+  log_level: "INFO"
+
+expected:
+  qber_range: [0.04, 0.10]
+  success_rate_min: 0.5

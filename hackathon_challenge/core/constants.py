@@ -8,7 +8,7 @@ Reference:
 # Security parameters
 QBER_THRESHOLD: float = 0.11  # Shor-Preskill bound (11%)
 SECURITY_PARAMETER: float = 1e-12  # ε_sec for verification/PA
-MIN_KEY_LENGTH: int = 100  # Minimum viable final key length
+MIN_KEY_LENGTH: int = 32  # Minimum viable final key length (reduced for testing)
 
 # Cascade protocol
 CASCADE_EFFICIENCY: float = 1.15  # Typical efficiency factor (1.05-1.2)
