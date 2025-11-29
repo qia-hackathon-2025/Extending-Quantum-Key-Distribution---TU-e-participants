@@ -35,10 +35,9 @@ See [hackathon_challenge/README.md](hackathon_challenge/README.md) for detailed 
 
 | Directory | Content |
 |:----------|:--------|
-| `challenges/qkd/` | Theoretical and technical specifications for the QKD extension challenge |
-| `tutorials/` | Step-by-step SquidASM guides (basics, NetQASM, simulation control) |
-| `api/` | Reference documentation for SquidASM classes and functions |
-| `Advanced/` | Custom protocols, noise models, debugging |
+| `challenges/qkd/` | Theoretical and implementation plan specifications for the QKD extension challenge |
+| `coding_guidelines/` | Numpydocs for coding guidelines |
+| `Extending-Quantum-Key-Distribution-QKD.pptx` | Project presentation during QIA event |
 
 ## Installation
 
